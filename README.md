@@ -58,7 +58,7 @@ cd exploit && ./docker-build.sh bin             # exploit_static
 
 # 2. Obtain/build the KSU bundle binaries into ksu/tools/ —
 #    see ksu/tools/README.md (kernelsu_h80gt.ko: ksu/README.md;
-#    ksud: shipped in the repo; magiskpolicy: Magisk; load_ko/kmsg_dumper:
+#    ksud: shipped in the repo; magiskpolicy: shipped in the repo; load_ko/kmsg_dumper:
 #    ./docker-build.sh tools)
 
 # 3. Enable ADB debugging on the phone, then

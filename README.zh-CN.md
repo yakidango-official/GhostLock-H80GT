@@ -43,7 +43,7 @@ cd exploit && ./docker-build.sh bin             # 生成exploit_static
 
 # 2. 准备KSU相关文件到ksu/tools/
 #    见ksu/tools/README.md(kernelsu_h80gt.ko的编译方法见ksu/README.md;
-#    ksud已随仓库提供;magiskpolicy从Magisk提取;
+#    ksud已随仓库提供;magiskpolicy已随仓库提供;
 #    load_ko/kmsg_dumper由./docker-build.sh tools编译)
 
 # 3. 手机打开ADB调试，
