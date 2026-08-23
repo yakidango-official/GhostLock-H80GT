@@ -26,7 +26,7 @@ ksu/         自编译kernelsu.ko与PC侧adb加载脚本
 
 需要：Docker、Android Platform Tools。
 
-使用预构建包（仅在MagicOS 8.0.0.128上通过测试）：
+使用预构建包（仅在MagicOS 8.0.0.128上通过测试）：[h80gt_setup.sh](https://github.com/yakidango-official/GhostLock-H80GT/releases/download/v0.1/h80gt_setup.sh)
 
 ```sh
 adb push h80gt_setup.sh /sdcard/

@@ -41,7 +41,7 @@ ksu/         custom kernelsu.ko build (MagicOS kernel + device config) and the
 
 Requirements: Docker, Android Platform Tools.
 
-Prebuilt package (tested only on MagicOS 8.0.0.128):
+Prebuilt package (tested only on MagicOS 8.0.0.128): [h80gt_setup.sh](https://github.com/yakidango-official/GhostLock-H80GT/releases/download/v0.1/h80gt_setup.sh)
 
 ```sh
 adb push h80gt_setup.sh /sdcard/
