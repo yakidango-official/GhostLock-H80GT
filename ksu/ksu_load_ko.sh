@@ -68,14 +68,14 @@ build_exploit_env(){
 
 # ---- symbol link addresses (vmlinux-verified); runtime = link + slide ----
 # The custom .ko has exactly ONE undefined symbol stripped from device
-# kallsyms: commit_creds (T, exported). __cfi_slowpath_diag IS present
-# (CONFIG_HONOR_CFI_POINTER_INFO=y); kasan_flag_enabled/prepare_kernel_cred
-# are not referenced by the custom build.
-LINK_COMMIT_CRED=0xffffffc008170400
-# boot_id ctl entry + buffer (statics, kallsyms-stripped); the module restores
-# ctl_table.data := &sysctl_bootid from kernel side (init.c h80gt_restore_bootid).
-LINK_BOOTID_CTL=0xffffffc00ae29a30
-LINK_BOOTID_BUF=0xffffffc00b068d4d
+# kallsyms: commit_creds (T, exported). boot_id ctl/buf (statics, stripped)
+# are restored by the module (init.c h80gt_restore_bootid).
+# Defaults come from the selected PROJECT's target.h; env overrides win.
+_target_h="$ROOT/exploit/src/targets/$PROJECT/target.h"
+_th() { sed -n "s/^#define $1 \\(0x[0-9a-fA-F]*\\).*/\\1/p" "$_target_h" | head -1; }
+LINK_COMMIT_CRED="${LINK_COMMIT_CRED:-$(_th LINK_COMMIT_CRED_ADDR)}"
+LINK_BOOTID_CTL="${LINK_BOOTID_CTL:-$(_th LINK_BOOTID_CTL_ADDR)}"
+LINK_BOOTID_BUF="${LINK_BOOTID_BUF:-$(_th LINK_BOOTID_BUF_ADDR)}"
 
 mkdir -p "$WORK"
 log(){ echo "[ksu_load $(date +%H:%M:%S)] $*" | tee -a "$SUMMARY"; }
@@ -83,9 +83,6 @@ log(){ echo "[ksu_load $(date +%H:%M:%S)] $*" | tee -a "$SUMMARY"; }
 device_ready(){ adb wait-for-device 2>/dev/null || return 1; for i in $(seq 1 20); do adb shell true 2>/dev/null && return 0; sleep 2; done; return 1; }
 wait_boot(){ for i in $(seq 1 40); do [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ] && return 0; sleep 3; done; return 1; }
 uptime_s(){ adb shell cat /proc/uptime 2>/dev/null | awk '{print int($1)}' | tr -d '\r'; }
-# Never run the exploit before ~240s uptime: Honor's early-boot antiroot
-# window appears to have teeth before then. SETTLE_S=0 tests the hypothesis.
-settle240(){ while :; do u=$(uptime_s); [ -n "$u" ] && [ "$u" -ge "${SETTLE_S:-240}" ] 2>/dev/null && break; sleep 10; done; }
 getenforce_dev(){ adb shell getenforce 2>/dev/null | tr -d '\r'; }
 
 # ksud: prefer the repo-shipped binary; fall back to extracting from the APK
@@ -314,9 +311,6 @@ report(){
 log "KSU .ko load attempt start (tries=$MAX_TRIES)"
 device_ready || { log "no device"; exit 1; }
 wait_boot || log "boot_completed wait timed out (continuing)"
-log "pre-exploit settle: waiting uptime>=240s (early-boot antiroot window)"
-settle240
-log "device settled (uptime=$(uptime_s)s)"
 extract_ksud || true
 
 for t in $(seq 1 "$MAX_TRIES"); do
@@ -332,7 +326,5 @@ for t in $(seq 1 "$MAX_TRIES"); do
   log "miss"
   reboot_device || { log "could not reboot device (wedged) — MANUAL REBOOT NEEDED"; exit 1; }
   wait_boot || true
-  log "post-reboot settle to >=240s"
-  settle240
 done
 log "FAILED after $MAX_TRIES tries"; exit 1

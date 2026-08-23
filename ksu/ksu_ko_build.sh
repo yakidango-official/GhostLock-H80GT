@@ -17,16 +17,21 @@ repo_dir="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"
 stage_dir="${KSU_BUILD_DIR:-$repo_dir/.build}"
 mkdir -p "$stage_dir"
 
-# KERNEL_SRC: Honor's MagicOS 8.0 opensource kernel tree (the
-# Code_Opensource/kernel directory from the AGT-AN00 opensource package).
+# KERNEL_SRC: an Honor MagicOS opensource kernel tree whose sublevel matches
+# the target firmware (the Code_Opensource/kernel directory of the AGT-AN00
+# package): the MagicOS 8.0 tree for 8.0.0.128 (5.10.168), the MagicOS 9.0
+# tree for 8.0.0.160 (5.10.209).
 if [ -z "${KERNEL_SRC:-}" ]; then
-    echo "ERROR: set KERNEL_SRC to the MagicOS 8.0 opensource kernel tree" >&2
+    echo "ERROR: set KERNEL_SRC to the MagicOS opensource kernel tree" >&2
     echo "  (the Code_Opensource/kernel directory of the AGT-AN00 package)." >&2
     exit 1
 fi
 kernel_src="$(CDPATH= cd -- "$KERNEL_SRC" && pwd)"
 
-cp "$repo_dir/h80gt_device.config" "$stage_dir/.config"
+# KSU_DEVICE_CONFIG: the target firmware's kernel config (its /proc/config.gz,
+# or extract-ikconfig output from its boot.img). Defaults to the 8.0.0.128
+# device config shipped in this repo.
+cp "${KSU_DEVICE_CONFIG:-$repo_dir/h80gt_device.config}" "$stage_dir/.config"
 cp "$repo_dir/h80gt_kallsyms_names.txt" "$stage_dir/" 2>/dev/null || true
 cp "$repo_dir/build_inner.sh" "$repo_dir/empty_versions.py" "$stage_dir/"
 

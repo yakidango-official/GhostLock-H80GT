@@ -2,10 +2,10 @@ English | [中文](README.zh-CN.md)
 
 # Honor 80 GT Privilege Escalation PoC: GhostLock (CVE-2026-43499)
 
-A local privilege escalation exploit for the **Honor 80 GT (AGT-AN00, MagicOS
-8.0.0.128, kernel 5.10.168)** (CVE-2026-43499, a use-after-free in the kernel
-`rtmutex` `remove_waiter` path), plus a companion KernelSU kernel-module
-loading solution.
+A local privilege escalation exploit for the **Honor 80 GT (AGT-AN00)** —
+MagicOS **8.0.0.128** (kernel 5.10.168) and **8.0.0.160** (kernel 5.10.209),
+CVE-2026-43499, a use-after-free in the kernel `rtmutex` `remove_waiter`
+path — plus a companion KernelSU kernel-module loading solution.
 
 > ⚠️ **Warning**
 >
@@ -52,17 +52,20 @@ Build from source instead:
 
 ```sh
 # 1. Build the device exploit binary
-cd exploit && ./docker-build.sh bin             # exploit_static
+cd exploit && ./docker-build.sh bin             # exploit_static (8.0.0.128)
+#    8.0.0.160: ./docker-build.sh PROJECT=annap-AGT-AN00_8.0.0.160 bin
 #    (./docker-build.sh ondevice builds the static binary with the default
 #     env config baked in; first run pulls the NDK, ~1.2GB)
 
 # 2. Obtain/build the KSU bundle binaries into ksu/tools/ —
-#    see ksu/tools/README.md (kernelsu_h80gt.ko: ksu/README.md;
+#    see ksu/tools/README.md (kernelsu_h80gt.ko: ksu/README.md — build it
+#    against the opensource tree matching your firmware's kernel sublevel;
 #    ksud: shipped in the repo; magiskpolicy: shipped in the repo; load_ko/kmsg_dumper:
 #    ./docker-build.sh tools)
 
 # 3. Enable ADB debugging on the phone, then
 bash ../ksu/ksu_load_ko.sh
+#    8.0.0.160: PROJECT=annap-AGT-AN00_8.0.0.160 bash ../ksu/ksu_load_ko.sh
 ```
 
 The script drives the whole chain over adb: GhostLock (root + permissive +
@@ -82,14 +85,14 @@ symbols. The flow bind-mounts a fake kallsyms with the stripped symbols
 prepended at their true runtime addresses (link addr + KASLR slide).
 - GKI struct layouts also differ from Honor's, so the stock GKI
 `android12-5.10_kernelsu.ko` cannot be used directly. `ksu/` rebuilds
-KernelSU v3.2.5 against the MagicOS 5.10.168 kernel source and the
-device's own `/proc/config.gz`. See `ksu/README.md`.
+KernelSU v3.2.5 against the MagicOS kernel source matching the firmware's
+sublevel and the device's own kernel config. See `ksu/README.md`.
 
 ## Verification status
 
 - Full chain (UAF → KASLR → arbitrary R/W → cred → SELinux permissive →
 sig_enforce → KernelSU live, enforcing restored) verified on the real
-device.
+device, on MagicOS 8.0.0.128 and 8.0.0.160.
 
 ## Credits
 

@@ -2,7 +2,7 @@
 
 # 荣耀80 GT 提权 PoC：GhostLock (CVE-2026-43499)
 
-适用于荣耀80 GT（AGT-AN00，MagicOS 8.0.0.128，内核5.10.168）的本地提权exploit，以及配套的KernelSU内核模块加载方案。
+适用于荣耀80 GT（AGT-AN00，MagicOS 8.0.0.128与8.0.0.160，内核5.10.168/5.10.209）的本地提权exploit，以及配套的KernelSU内核模块加载方案。
 
 > ⚠️ **警告**
 >
@@ -37,17 +37,20 @@ adb shell sh /sdcard/h80gt_setup.sh     # 或在Shizuku(rish)里跑
 
 ```sh
 # 1. 编译exploit
-cd exploit && ./docker-build.sh bin             # 生成exploit_static
+cd exploit && ./docker-build.sh bin             # 生成exploit_static(8.0.0.128)
+#    8.0.0.160: ./docker-build.sh PROJECT=annap-AGT-AN00_8.0.0.160 bin
 #    (./docker-build.sh ondevice生成免环境变量的静态版;
 #     首次运行会下载NDK,约1.2GB)
 
 # 2. 准备KSU相关文件到ksu/tools/
-#    见ksu/tools/README.md(kernelsu_h80gt.ko的编译方法见ksu/README.md;
+#    见ksu/tools/README.md(kernelsu_h80gt.ko的编译方法见ksu/README.md,
+#    需用与固件内核子版本匹配的开源树编译;
 #    ksud已随仓库提供;magiskpolicy已随仓库提供;
 #    load_ko/kmsg_dumper由./docker-build.sh tools编译)
 
 # 3. 手机打开ADB调试，
 bash ../ksu/ksu_load_ko.sh
+#    8.0.0.160: PROJECT=annap-AGT-AN00_8.0.0.160 bash ../ksu/ksu_load_ko.sh
 ```
 
 脚本会自动完成：exploit提权并翻转`sig_enforce`→注入SELinux策略→bind-mount伪造的kallsyms→加载.ko→ksud初始化→最后恢复SELinux enforcing。`/proc/modules`里出现`kernelsu`后，打开KernelSU管理器（显示“工作中&lt;LKM&gt;[越狱模式]”）就能用了。
@@ -56,11 +59,11 @@ bash ../ksu/ksu_load_ko.sh
 
 - `CONFIG_MODULE_SIG_FORCE=y`运行时`sig_enforce`标志会阻止未签名模块加载，exploit过程会将其临时翻转为0（模块加载完成后由加载脚本恢复为1）。
 - kallsyms符号名被抹除。荣耀把`commit_creds`等符号从`/proc/kallsyms`里删掉了，内核加载模块时解析不到。解决办法是bind-mount一份伪造的kallsyms，把缺的符号按真实运行时地址（链接地址+KASLR slide）补在最前面。
-- 另外，GKI的结构体布局和荣耀的不一样，官方GKI的`android12-5.10_kernelsu.ko`无法直接使用。所以`ksu/`用MagicOS 5.10.168内核源码和设备自己的`/proc/config.gz`重编了KernelSU v3.2.5，细节见`ksu/README.md`。
+- 另外，GKI的结构体布局和荣耀的不一样，官方GKI的`android12-5.10_kernelsu.ko`无法直接使用。所以`ksu/`用与固件内核子版本匹配的MagicOS内核源码和设备自己的内核配置重编了KernelSU v3.2.5，细节见`ksu/README.md`。
 
 ## 验证状态
 
-完整链路（提权→KASLR→任意读写→cred→SELinux permissive→sig_enforce→KernelSU存活→恢复enforcing）已在真机跑通。
+完整链路（提权→KASLR→任意读写→cred→SELinux permissive→sig_enforce→KernelSU存活→恢复enforcing）已在真机跑通（MagicOS 8.0.0.128与8.0.0.160）。
 
 ## 致谢
 
