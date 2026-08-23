@@ -1,0 +1,60 @@
+# KernelSU v3.2.5 apply_kernelsu_rules() equivalent, for magiskpolicy --apply.
+# Faithful translation of kernel/selinux/rules.c (init-time rule set) so a
+# late-loaded module gets the DEFAULT KSU policy state via the kernel's own
+# security_load_policy path (sidtab_convert => running processes keep working).
+
+# --- ksu domain (KERNEL_SU_DOMAIN="ksu") ---
+type ksu domain
+permissive ksu
+typeattribute ksu mlstrustedsubject
+typeattribute ksu netdomain
+typeattribute ksu bluetoothdomain
+
+# --- unconstrained file type (KERNEL_SU_FILE="ksu_file") ---
+type ksu_file file_type
+typeattribute ksu_file mlstrustedobject
+allow domain ksu_file * *
+
+# --- allow all! ---
+allow ksu * * *
+
+# --- allow any ioctl (policyvers 30 supports xperm) ---
+allowxperm ksu * blk_file ioctl *
+allowxperm ksu * fifo_file ioctl *
+allowxperm ksu * chr_file ioctl *
+allowxperm ksu * file ioctl *
+
+# --- our ksud triggered by init ---
+allow init ksu * *
+
+# --- suRights (copied from Magisk rules in rules.c) ---
+allow servicemanager ksu dir { search read }
+allow servicemanager ksu file { open read }
+allow servicemanager ksu process getattr
+allow domain ksu process sigchld
+
+# --- allowLog ---
+allow logd ksu dir search
+allow logd ksu file { read open getattr }
+
+# --- dumpsys, send fd ---
+allow domain ksu fd use
+allow domain ksu fifo_file *
+allow domain ksu unix_stream_socket *
+
+# --- use memfd created by su domain ---
+# NOTE: Honor's policy (v30) has NO memfd_file class (magiskpolicy: "class
+# memfd_file does not exist"); KSU's kernel-side ksu_allow silently no-ops
+# there too. Kept commented for fidelity with rules.c.
+# allow domain ksu memfd_file *
+
+# --- bootctl ---
+allow hwservicemanager ksu dir search
+allow hwservicemanager ksu file { read open }
+allow hwservicemanager ksu process getattr
+
+# --- Allow all binder transactions ---
+allow domain ksu binder *
+
+# --- Allow system server kill su process ---
+allow system_server ksu process { getpgid sigkill }

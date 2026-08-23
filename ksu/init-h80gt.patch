@@ -1,0 +1,66 @@
+diff --git a/kernel/core/init.c b/kernel/core/init.c
+index e6e1b684..8bb961e2 100644
+--- a/kernel/core/init.c
++++ b/kernel/core/init.c
+@@ -80,6 +80,30 @@ bool allow_shell = false;
+ #endif
+ module_param(allow_shell, bool, 0);
+ 
++// H80GT: the GhostLock sysctl route hijacks boot_id's ctl_table.data as its
++// arbitrary R/W channel and never restores it to buffer+0, so after the
++// chain /proc/sys/kernel/random/boot_id reads VOLATILE kernel memory.
++// libcutils builds /dev/ashmem<boot_id> at every app start -> ENOENT ->
++// fallback /dev/ashmem is denied for app domains -> every app crashes, and a
++// userspace mknod chase cannot work (the value keeps changing). Kernel-space
++// fix: point ctl_table.data back at the true sysctl_bootid buffer (ueventd
++// already created /dev/ashmem<true-uuid> at boot). Both are statics stripped
++// from kallsyms, so the loader passes link+slide as module params.
++static unsigned long h80gt_bootid_ctl;
++module_param(h80gt_bootid_ctl, ulong, 0);
++static unsigned long h80gt_bootid_buf;
++module_param(h80gt_bootid_buf, ulong, 0);
++
++static void __init h80gt_restore_bootid(void)
++{
++    if (!h80gt_bootid_ctl || !h80gt_bootid_buf)
++        return;
++    // struct ctl_table: procname @ +0, data @ +8 (device-verified layout)
++    *(void **)(h80gt_bootid_ctl + 8) = (void *)h80gt_bootid_buf;
++    pr_info("H80GT: boot_id ctl.data restored (ctl=0x%lx buf=0x%lx)\n",
++            h80gt_bootid_ctl, h80gt_bootid_buf);
++}
++
+ bool ksu_no_custom_rc = false;
+ module_param_named(norc, ksu_no_custom_rc, bool, 0);
+ 
+@@ -140,7 +164,16 @@ int __init kernelsu_init(void)
+     if (ksu_late_loaded) {
+         pr_info("late load mode, skipping kprobe hooks\n");
+ 
+-        apply_kernelsu_rules();
++        // H80GT: NEVER call apply_kernelsu_rules() on a late load: it dup's
++        // the live policydb, patches the copy, rcu_assign_pointer()s it in and
++        // destroys the old policy, but NEVER calls security_load_policy() —
++        // so sidtab_convert() never runs and every running SID keeps a
++        // context computed against the destroyed policydb (device-verified:
++        // attr/current unreadable, servicemanager broken system-wide, a soft
++        // reboot does not heal). The same rules are instead injected BEFORE
++        // this module loads via magiskpolicy --live (device-verified clean).
++        pr_info("H80GT: not touching live sepolicy (rules pre-injected)\n");
++        h80gt_restore_bootid();
+         cache_sid();
+         setup_ksu_cred();
+ 
+@@ -161,9 +194,10 @@ int __init kernelsu_init(void)
+         ksu_boot_completed = true;
+         track_throne(false);
+ 
++        // H80GT: do NOT setenforce(true) here. Enforcing is flipped manually
++        // as the LAST step of the load flow, after userspace is set up.
+         if (!getenforce()) {
+-            pr_info("Permissive SELinux, enforcing\n");
+-            setenforce(true);
++            pr_info("H80GT: keeping permissive until flow enforces manually\n");
+         }
+ 
+     } else {

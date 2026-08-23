@@ -1,0 +1,11 @@
+# ---- build outputs ----
+exploit/build/
+
+# ---- binaries from external builds / releases (see ksu/tools/README.md) ----
+ksu/tools/kernelsu_h80gt.ko
+ksu/tools/magiskpolicy
+ksu/tools/load_ko
+ksu/tools/kmsg_dumper
+
+.DS_Store
+ksu/.build/
