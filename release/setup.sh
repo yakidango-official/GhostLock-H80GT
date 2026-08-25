@@ -83,8 +83,8 @@ if [ -z "$MATCH" ]; then
   echo "未知设备/系统。"
   exit 1
 fi
-VER="${MATCH#*|}"; VER="${VER%%|*}"
-STATUS="${MATCH##*|}"
+VER="$(printf '%s' "$MATCH" | cut -d'|' -f2)"
+STATUS="$(printf '%s' "$MATCH" | cut -d'|' -f3)"
 
 if [ "$STATUS" = verified ]; then
   echo "== firmware: MagicOS $VER (verified)"
