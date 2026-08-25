@@ -96,7 +96,7 @@ int main(int argc, char **argv){
   LOG("[*] symtab: %zu symbols\n", nsyms);
 
   // ---- collect undefined symbol names into the hash set ----
-  // kasan_flag_enabled alias: the custom kernelsu_h80gt.ko does NOT reference
+  // kasan_flag_enabled alias: the custom kernelsu.ko does NOT reference
   // it, but a stock inline-KASAN GKI .ko does while this kernel has
   // CONFIG_KASAN=n. Resolving it to CODE (ret stub, first byte != 0) would
   // make KASAN instrumentation touch the unmapped shadow -> panic. Aliasing

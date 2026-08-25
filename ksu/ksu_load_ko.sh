@@ -45,13 +45,13 @@ MAX_TRIES="${MAX_TRIES:-3}"
 # binary. Fresh paths = guaranteed-clean inodes; stale ones are GC'd by the
 # root loader while permissive.
 RUNDIR=/data/local/tmp/ksu_run_$STAMP
-BIN_DEV=$RUNDIR/h80gt_exploit
+BIN_DEV=$RUNDIR/gl_exploit
 KSUD_DEV=$RUNDIR/ksud
-KO_LOCAL="$ROOT/ksu/tools/kernelsu_h80gt.ko"   # custom build: KSU v3.2.5 against MagicOS 5.10.168 + device config — struct offsets match Honor's kernel; see ksu/README.md
+KO_LOCAL="$ROOT/ksu/tools/kernelsu.ko"   # custom build: KSU v3.2.5 against MagicOS 5.10.168 + device config — struct offsets match Honor's kernel; see ksu/README.md
 KO_DEV=$RUNDIR/kernelsu.ko
 LOADKO_LOCAL="$ROOT/ksu/tools/load_ko"   # custom loader: SHN_ABS resolution via (fake) kallsyms + plain init_module(flags=0)
 LOADKO_DEV=$RUNDIR/load_ko
-EXPLOG=$RUNDIR/h80gt_sysctl.log
+EXPLOG=$RUNDIR/gl_sysctl.log
 
 # ---- flow toggles (bisect/debug; default flow = STAGES=1 ENFORCE=1 ALLOW_SHELL=0) ----
 KSU_STAGES="${KSU_STAGES:-1}"        # ksud post-fs-data/services/boot-completed/install after load
@@ -69,7 +69,7 @@ build_exploit_env(){
 # ---- symbol link addresses (vmlinux-verified); runtime = link + slide ----
 # The custom .ko has exactly ONE undefined symbol stripped from device
 # kallsyms: commit_creds (T, exported). boot_id ctl/buf (statics, stripped)
-# are restored by the module (init.c h80gt_restore_bootid).
+# are restored by the module (init.c restore_bootid).
 # Defaults come from the selected PROJECT's target.h; env overrides win.
 _target_h="$ROOT/exploit/src/targets/$PROJECT/target.h"
 _th() { sed -n "s/^#define $1 \\(0x[0-9a-fA-F]*\\).*/\\1/p" "$_target_h" | head -1; }
@@ -98,7 +98,7 @@ extract_ksud(){
 }
 
 # launch exploit (permissive + sig flip). NEVER infer success/failure from
-# `pgrep h80gt_exploit` — the anchor exec()s `sh` for the loader runner and
+# `pgrep gl_exploit` — the anchor exec()s `sh` for the loader runner and
 # walk children exit between stages, so pgrep goes empty even on a GOOD run.
 # Instead, poll the exploit log for the 'anchor rooted' marker (proves the
 # cred write landed), then for the sig-flip marker.
@@ -110,7 +110,7 @@ establish(){
   adb logcat -c 2>/dev/null
   adb logcat -v threadtime > "$WORK/logcat_stream.txt" 2>/dev/null &
   LOGCAT_STREAM_PID=$!
-  adb shell "pkill -9 -f 'h80gt_ex[p]loit'" 2>/dev/null; sleep 2
+  adb shell "pkill -9 -f 'gl_ex[p]loit'" 2>/dev/null; sleep 2
   adb shell "mkdir -p $RUNDIR" 2>/dev/null
   push_loader_payloads || return 1
   build_exploit_env
@@ -150,14 +150,14 @@ establish(){
     if adb shell "grep -qa 'sig_enforce FLIPPED' $EXPLOG 2>/dev/null" 2>/dev/null; then
       log "*** sig_enforce FLIPPED in $(( $(date +%s)-s0 ))s after anchor ***"
       adb shell "cat $EXPLOG 2>/dev/null" > "$WORK/exploit.log"
-      adb shell "pkill -9 -f 'h80gt_ex[p]loit'" 2>/dev/null; sleep 2   # free CPU; cloaked processes (cmd watcher, parked walk waiters) survive — killing a parked waiter panics the kernel
+      adb shell "pkill -9 -f 'gl_ex[p]loit'" 2>/dev/null; sleep 2   # free CPU; cloaked processes (cmd watcher, parked walk waiters) survive — killing a parked waiter panics the kernel
       return 0
     fi
     sleep 2
   done
   log "sig_enforce marker absent after anchor up (walk may have missed); will still attempt load"
   adb shell "cat $EXPLOG 2>/dev/null" > "$WORK/exploit.log"
-  adb shell "pkill -9 -f 'h80gt_ex[p]loit'" 2>/dev/null; sleep 2
+  adb shell "pkill -9 -f 'gl_ex[p]loit'" 2>/dev/null; sleep 2
   return 0   # permissive+anchor are up; try the load anyway (EKEYREJECTED tells us if sig missed)
 }
 

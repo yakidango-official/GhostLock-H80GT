@@ -29,6 +29,27 @@ MagicOS 9.0 tree for 8.0.0.160 (kernel 5.10.209):
 KERNEL_SRC=/path/to/Code_Opensource/kernel bash ksu_ko_build.sh
 ```
 
+`kernel.config.<version>` in this directory are the device kernel configs
+extracted from each firmware's boot image (one file per distinct config;
+identical configs share the representative version's file):
+
+| config file | firmware |
+|---|---|
+| `kernel.config.8.0.0.128` | 8.0.0.128 |
+| `kernel.config.8.0.0.131` | 8.0.0.131 |
+| `kernel.config.8.0.0.160` | 8.0.0.160 / 8.0.0.161 |
+| `kernel.config.9.0.0.157` | 9.0.0.102 / 103 / 120 / 130 / 157 / 165 |
+| `kernel.config.9.0.0.175SP1` | 9.0.0.175SP1 / 187 |
+| `kernel.config.9.0.0.200SP1` | 9.0.0.200SP1 |
+| `kernel.config.9.0.0.220SP2` | 9.0.0.210 / 220SP2 / 220SP4 |
+
+The build uses `kernel.config.8.0.0.128` by default; point it at your
+firmware's file with `KSU_DEVICE_CONFIG`, e.g.:
+
+```
+KERNEL_SRC=... KSU_DEVICE_CONFIG=ksu/kernel.config.9.0.0.157 bash ksu_ko_build.sh
+```
+
 For firmware other than 8.0.0.128, also pass that firmware's kernel config
 (its `/proc/config.gz`, or `extract-ikconfig` output from its boot.img):
 
@@ -38,8 +59,8 @@ KERNEL_SRC=/path/to/Code_Opensource/kernel KSU_DEVICE_CONFIG=/path/to/kernel.con
 
 The KernelSU v3.2.5 source (auto-cloned and patched on first run) and the
 device symbol-name list are staged automatically into `ksu/.build/`. The
-output is `ksu/.build/kernelsu_h80gt.ko` — copy it to
-`tools/kernelsu_h80gt.ko` for use.
+output is `ksu/.build/kernelsu.ko` — copy it to
+`tools/kernelsu.ko` for use.
 
 ## Load
 

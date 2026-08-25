@@ -5,14 +5,19 @@
 #   drift (task_struct.cred 0x780->0x7b8, inode.i_fsnotify_marks 0x290->0x288).
 #
 # Everything except KERNEL_SRC is auto-staged into ksu/.build/:
-#   .config                  <- repo's h80gt_device.config (device config.gz)
+#   .config                  <- repo's kernel.config.8.0.0.128 (device config.gz)
 #   ksu/                     <- auto-cloned KernelSU v3.2.5 (with .git, patch applied)
-#   h80gt_kallsyms_names.txt <- repo's device symbol-name list (validation)
+#   kallsyms_names.8.0.0.128 <- repo's device symbol-name list (validation)
 #
-# Output: ksu/.build/kernelsu_h80gt.ko
+# Output: ksu/.build/kernelsu.ko
 set -eu
 
-container_name="honor80gt-ksu-build"
+container_name="gl-ksu-build"
+# one-time migration from the pre-rename container (keeps the build cache)
+if ! docker container inspect gl-ksu-build >/dev/null 2>&1; then
+    docker container inspect honor80gt-ksu-build >/dev/null 2>&1 \
+        && docker rename honor80gt-ksu-build gl-ksu-build
+fi
 repo_dir="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"
 stage_dir="${KSU_BUILD_DIR:-$repo_dir/.build}"
 mkdir -p "$stage_dir"
@@ -31,8 +36,8 @@ kernel_src="$(CDPATH= cd -- "$KERNEL_SRC" && pwd)"
 # KSU_DEVICE_CONFIG: the target firmware's kernel config (its /proc/config.gz,
 # or extract-ikconfig output from its boot.img). Defaults to the 8.0.0.128
 # device config shipped in this repo.
-cp "${KSU_DEVICE_CONFIG:-$repo_dir/h80gt_device.config}" "$stage_dir/.config"
-cp "$repo_dir/h80gt_kallsyms_names.txt" "$stage_dir/" 2>/dev/null || true
+cp "${KSU_DEVICE_CONFIG:-$repo_dir/kernel.config.8.0.0.128}" "$stage_dir/.config"
+cp "${KSU_KALLSYMS_NAMES:-$repo_dir/kallsyms_names.8.0.0.128}" "$stage_dir/kallsyms_names.txt" 2>/dev/null || true
 cp "$repo_dir/build_inner.sh" "$repo_dir/empty_versions.py" "$stage_dir/"
 
 # KernelSU v3.2.5 checkout. .git must be present and at the tag so
@@ -42,9 +47,16 @@ if [ ! -d "$stage_dir/ksu/.git" ]; then
     git clone https://github.com/tiann/KernelSU "$stage_dir/ksu"
     git -C "$stage_dir/ksu" checkout -q v3.2.5
 fi
-if git -C "$stage_dir/ksu" apply --check "$repo_dir/init-h80gt.patch" 2>/dev/null; then
-    git -C "$stage_dir/ksu" apply "$repo_dir/init-h80gt.patch"
+# The staged clone persists across builds and may already carry an OLDER
+# version of the patch (which would make apply --check fail and silently
+# build the stale source). Reset init.c to pristine first, then apply —
+# and fail loudly if the patch no longer fits.
+git -C "$stage_dir/ksu" checkout -- kernel/core/init.c
+if ! git -C "$stage_dir/ksu" apply --check "$repo_dir/init-bootid.patch" 2>/dev/null; then
+    echo "ERROR: init-bootid.patch does not apply to the KernelSU checkout" >&2
+    exit 1
 fi
+git -C "$stage_dir/ksu" apply "$repo_dir/init-bootid.patch"
 
 docker rm -f "$container_name" >/dev/null 2>&1 || true
 

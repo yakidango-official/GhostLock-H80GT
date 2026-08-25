@@ -56,16 +56,16 @@ make -C /kernel M=/ksu/kernel $TOOLS CONFIG_KSU=m KCFLAGS=-Wno-error modules -j"
 
 ls -la /ksu/kernel/kernelsu.ko
 
-python3 /build/empty_versions.py /ksu/kernel/kernelsu.ko /build/kernelsu_h80gt.ko
-llvm-nm -u /build/kernelsu_h80gt.ko 2>/dev/null | awk '{print $NF}' | sort -u > /build/ko_undefsyms.txt || true
+python3 /build/empty_versions.py /ksu/kernel/kernelsu.ko /build/kernelsu.ko
+llvm-nm -u /build/kernelsu.ko 2>/dev/null | awk '{print $NF}' | sort -u > /build/ko_undefsyms.txt || true
 
 echo "=== undefined symbols not present in device kallsyms (need injection) ==="
-if [ -f /build/h80gt_kallsyms_names.txt ]; then
-    LC_ALL=C sort -u /build/h80gt_kallsyms_names.txt > /build/ks_names.txt || true
+if [ -f /build/kallsyms_names.txt ]; then
+    LC_ALL=C sort -u /build/kallsyms_names.txt > /build/ks_names.txt || true
     comm -23 /build/ko_undefsyms.txt /build/ks_names.txt > /build/ko_missing_syms.txt || true
     cat /build/ko_missing_syms.txt || true
 else
     echo "(no device symbol-name list — skipped; documented answer: commit_creds)"
 fi
 
-echo "=== BUILD DONE: /build/kernelsu_h80gt.ko ==="
+echo "=== BUILD DONE: /build/kernelsu.ko ==="

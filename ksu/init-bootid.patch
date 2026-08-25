@@ -15,19 +15,19 @@ index e6e1b684..8bb961e2 100644
 +// fix: point ctl_table.data back at the true sysctl_bootid buffer (ueventd
 +// already created /dev/ashmem<true-uuid> at boot). Both are statics stripped
 +// from kallsyms, so the loader passes link+slide as module params.
-+static unsigned long h80gt_bootid_ctl;
-+module_param(h80gt_bootid_ctl, ulong, 0);
-+static unsigned long h80gt_bootid_buf;
-+module_param(h80gt_bootid_buf, ulong, 0);
++static unsigned long bootid_ctl;
++module_param(bootid_ctl, ulong, 0);
++static unsigned long bootid_buf;
++module_param(bootid_buf, ulong, 0);
 +
-+static void __init h80gt_restore_bootid(void)
++static void __init restore_bootid(void)
 +{
-+    if (!h80gt_bootid_ctl || !h80gt_bootid_buf)
++    if (!bootid_ctl || !bootid_buf)
 +        return;
 +    // struct ctl_table: procname @ +0, data @ +8 (device-verified layout)
-+    *(void **)(h80gt_bootid_ctl + 8) = (void *)h80gt_bootid_buf;
++    *(void **)(bootid_ctl + 8) = (void *)bootid_buf;
 +    pr_info("H80GT: boot_id ctl.data restored (ctl=0x%lx buf=0x%lx)\n",
-+            h80gt_bootid_ctl, h80gt_bootid_buf);
++            bootid_ctl, bootid_buf);
 +}
 +
  bool ksu_no_custom_rc = false;
@@ -47,7 +47,7 @@ index e6e1b684..8bb961e2 100644
 +        // reboot does not heal). The same rules are instead injected BEFORE
 +        // this module loads via magiskpolicy --live (device-verified clean).
 +        pr_info("H80GT: not touching live sepolicy (rules pre-injected)\n");
-+        h80gt_restore_bootid();
++        restore_bootid();
          cache_sid();
          setup_ksu_cred();
  

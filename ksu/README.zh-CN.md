@@ -17,7 +17,27 @@
 KERNEL_SRC=/path/to/Code_Opensource/kernel bash ksu_ko_build.sh
 ```
 
-设备config、KernelSU v3.2.5源码（首次运行自动克隆并打好补丁）、设备符号名列表都由脚本自动准备到`ksu/.build/`。产物为`ksu/.build/kernelsu_h80gt.ko`，复制到`tools/kernelsu_h80gt.ko`即可使用。
+本目录的 `kernel.config.<版本>` 是从各固件 boot 镜像提取的内核配置
+（内容相同的版本共用同一份文件）：
+
+| 配置文件 | 固件 |
+|---|---|
+| `kernel.config.8.0.0.128` | 8.0.0.128 |
+| `kernel.config.8.0.0.131` | 8.0.0.131 |
+| `kernel.config.8.0.0.160` | 8.0.0.160 / 161 |
+| `kernel.config.9.0.0.157` | 9.0.0.102 / 103 / 120 / 130 / 157 / 165 |
+| `kernel.config.9.0.0.175SP1` | 9.0.0.175SP1 / 187 |
+| `kernel.config.9.0.0.200SP1` | 9.0.0.200SP1 |
+| `kernel.config.9.0.0.220SP2` | 9.0.0.210 / 220SP2 / 220SP4 |
+
+构建默认用 `kernel.config.8.0.0.128`，用 `KSU_DEVICE_CONFIG` 指到
+自己固件对应的文件即可，例如：
+
+```
+KERNEL_SRC=... KSU_DEVICE_CONFIG=ksu/kernel.config.9.0.0.157 bash ksu_ko_build.sh
+```
+
+设备config、KernelSU v3.2.5源码（首次运行自动克隆并打好补丁）、设备符号名列表都由脚本自动准备到`ksu/.build/`。产物为`ksu/.build/kernelsu.ko`，复制到`tools/kernelsu.ko`即可使用。
 
 ## 加载
 
