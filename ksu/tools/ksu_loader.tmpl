@@ -16,6 +16,7 @@ OUT=$RD/ksu_load.log
     cp $d/kmsg_cap.txt $RD/prev_kmsg_$b.txt 2>/dev/null && echo "preserved $b/kmsg_cap.txt"
     cp $d/ksu_load.log $RD/prev_load_$b.log 2>/dev/null && echo "preserved $b/ksu_load.log"
   done
+  chmod -R 666 $RD/prev_* 2>/dev/null
   cp /sys/fs/pstore/* $RD/ 2>/dev/null && ls $RD/*pstore* $RD/console-ramoops* 2>/dev/null
   echo "=== runtime env (slide-derived addrs from exploit parent) ==="
   for i in $(seq 1 100); do [ -s $RD/ksu_runtime.env ] && break; sleep 1; done
