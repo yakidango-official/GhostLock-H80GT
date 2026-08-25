@@ -7,7 +7,7 @@ CVE-2026-43499 — a use-after-free in the kernel `rtmutex` `remove_waiter`
 path — plus a companion KernelSU kernel-module loading solution.
 
 In principle the bug and the techniques here apply to every MagicOS build
-up to 9.0.0.220. Adapted versions:
+up to 9.0.0.230. Adapted versions:
 
 | MagicOS | Kernel | Status |
 |---|---|---|
