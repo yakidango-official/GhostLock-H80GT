@@ -20,7 +20,7 @@ up to 9.0.0.220. Adapted versions:
 | 8.0.0.161 | 5.10.209 | ⚠️ not verified on a real device |
 | 9.0.0.102 / 120 / 130 / 165 | 5.10.209 | ⚠️ not verified on a real device |
 | 9.0.0.175SP1 / 187 | 5.10.226 | ⚠️ not verified on a real device |
-| 9.0.0.210 | 5.10.236 | ⚠️ not verified on a real device |
+| 9.0.0.210 / 230 | 5.10.236 | ⚠️ not verified on a real device |
 
 > ⚠️ **Warning**
 >
