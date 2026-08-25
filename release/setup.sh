@@ -175,6 +175,4 @@ done
 dev "ls -d $RD_ROOT/ksu_run_* 2>/dev/null | grep -v '^$RD\$' | xargs rm -rf 2>/dev/null; rm -f $RD_ROOT/result.done $RD_ROOT/gl_anchor.log $RD_ROOT/gl_root_proof $RD_ROOT/.ksu_patched.ko; true"
 
 echo
-echo "== done. Test:"
-echo "   adb shell su 0 id        # expect uid=0(root) context=u:r:ksu:s0"
-echo "On first use, approve the shell in the KernelSU manager app."
+echo "== done."
