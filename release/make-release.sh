@@ -7,7 +7,7 @@ set -eu
 cd "$(dirname "$0")/.."
 
 # Device-verified firmwares; everything else ships as untested.
-VERIFIED=" 8.0.0.128 8.0.0.160 9.0.0.157 9.0.0.200SP1 9.0.0.220SP2 "
+VERIFIED=" 8.0.0.128 8.0.0.160 9.0.0.157 9.0.0.200SP1 9.0.0.220SP2 9.0.0.230 "
 
 if [ $# -gt 0 ]; then
   TARGETS="$*"
