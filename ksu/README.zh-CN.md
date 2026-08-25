@@ -17,24 +17,13 @@
 KERNEL_SRC=/path/to/Code_Opensource/kernel bash ksu_ko_build.sh
 ```
 
-本目录的 `kernel.config.<版本>` 是从各固件 boot 镜像提取的内核配置
-（内容相同的版本共用同一份文件）：
-
-| 配置文件 | 固件 |
-|---|---|
-| `kernel.config.8.0.0.128` | 8.0.0.128 |
-| `kernel.config.8.0.0.131` | 8.0.0.131 |
-| `kernel.config.8.0.0.160` | 8.0.0.160 / 161 |
-| `kernel.config.9.0.0.157` | 9.0.0.102 / 103 / 120 / 130 / 157 / 165 |
-| `kernel.config.9.0.0.175SP1` | 9.0.0.175SP1 / 187 |
-| `kernel.config.9.0.0.200SP1` | 9.0.0.200SP1 |
-| `kernel.config.9.0.0.220SP2` | 9.0.0.210 / 220SP2 / 220SP4 |
-
-构建默认用 `kernel.config.8.0.0.128`，用 `KSU_DEVICE_CONFIG` 指到
-自己固件对应的文件即可，例如：
+本目录的 `kernel.config` 是 8.0.0.128 的设备配置（取自 `/proc/config.gz`），
+作为构建默认值。编出来的 .ko 在所有支持的固件上都能加载；想用自己固件的
+配置编译的话，用 `KSU_DEVICE_CONFIG` 传入（设备的 `/proc/config.gz`，或
+boot.img 的 `extract-ikconfig` 输出）：
 
 ```
-KERNEL_SRC=... KSU_DEVICE_CONFIG=ksu/kernel.config.9.0.0.157 bash ksu_ko_build.sh
+KERNEL_SRC=/path/to/Code_Opensource/kernel KSU_DEVICE_CONFIG=/path/to/kernel.config bash ksu_ko_build.sh
 ```
 
 设备config、KernelSU v3.2.5源码（首次运行自动克隆并打好补丁）、设备符号名列表都由脚本自动准备到`ksu/.build/`。产物为`ksu/.build/kernelsu.ko`，复制到`tools/kernelsu.ko`即可使用。

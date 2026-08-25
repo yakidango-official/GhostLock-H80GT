@@ -5,9 +5,9 @@
 #   drift (task_struct.cred 0x780->0x7b8, inode.i_fsnotify_marks 0x290->0x288).
 #
 # Everything except KERNEL_SRC is auto-staged into ksu/.build/:
-#   .config                  <- repo's kernel.config.8.0.0.128 (device config.gz)
+#   .config                  <- repo's kernel.config (device config.gz)
 #   ksu/                     <- auto-cloned KernelSU v3.2.5 (with .git, patch applied)
-#   kallsyms_names.8.0.0.128 <- repo's device symbol-name list (validation)
+#   kallsyms_names           <- repo's device symbol-name list (validation)
 #
 # Output: ksu/.build/kernelsu.ko
 set -eu
@@ -36,8 +36,8 @@ kernel_src="$(CDPATH= cd -- "$KERNEL_SRC" && pwd)"
 # KSU_DEVICE_CONFIG: the target firmware's kernel config (its /proc/config.gz,
 # or extract-ikconfig output from its boot.img). Defaults to the 8.0.0.128
 # device config shipped in this repo.
-cp "${KSU_DEVICE_CONFIG:-$repo_dir/kernel.config.8.0.0.128}" "$stage_dir/.config"
-cp "${KSU_KALLSYMS_NAMES:-$repo_dir/kallsyms_names.8.0.0.128}" "$stage_dir/kallsyms_names.txt" 2>/dev/null || true
+cp "${KSU_DEVICE_CONFIG:-$repo_dir/kernel.config}" "$stage_dir/.config"
+cp "${KSU_KALLSYMS_NAMES:-$repo_dir/kallsyms_names}" "$stage_dir/kallsyms_names.txt" 2>/dev/null || true
 cp "$repo_dir/build_inner.sh" "$repo_dir/empty_versions.py" "$stage_dir/"
 
 # KernelSU v3.2.5 checkout. .git must be present and at the tag so
