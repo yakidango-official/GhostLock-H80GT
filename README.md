@@ -2,10 +2,27 @@ English | [中文](README.zh-CN.md)
 
 # Honor 80 GT Privilege Escalation PoC: GhostLock (CVE-2026-43499)
 
-A local privilege escalation exploit for the **Honor 80 GT (AGT-AN00)** —
-MagicOS **8.0.0.128** (kernel 5.10.168) and **8.0.0.160** (kernel 5.10.209),
-CVE-2026-43499, a use-after-free in the kernel `rtmutex` `remove_waiter`
+A local privilege escalation exploit for the **Honor 80 GT (AGT-AN00)**,
+CVE-2026-43499 — a use-after-free in the kernel `rtmutex` `remove_waiter`
 path — plus a companion KernelSU kernel-module loading solution.
+
+In principle the bug and the techniques here apply to every MagicOS build
+up to 9.0.0.220: within a MagicOS major version the kernel structs stay
+put and only symbol addresses move. In practice each firmware needs its
+own offset table and a verified carrier, so this repo only ships targets
+that have actually been run on a real device:
+
+| MagicOS | Kernel | Status |
+|---|---|---|
+| 8.0.0.128 | 5.10.168 | verified on device |
+| 8.0.0.160 | 5.10.209 | verified on device |
+| 9.0.0.157 | 5.10.209 | verified on device |
+| 9.0.0.200SP1 | 5.10.236 | verified on device |
+| 9.0.0.220SP2 / SP4 | 5.10.236 | verified on device (SP4 ships the same boot image as SP2) |
+
+Other versions in the 9.0 line are expected to work after regenerating
+the offset table (`src/targets/`) and re-checking the kstack carrier
+slot; see the commit history for how 5.10.226/236 were handled.
 
 > ⚠️ **Warning**
 >
@@ -41,11 +58,12 @@ ksu/         custom kernelsu.ko build (MagicOS kernel + device config) and the
 
 Requirements: Docker, Android Platform Tools.
 
-Prebuilt package (tested only on MagicOS 8.0.0.128): [h80gt_setup.sh](https://github.com/yakidango-official/GhostLock-H80GT/releases/download/v0.1/h80gt_setup.sh)
+Prebuilt bundles per firmware: grab the one matching your MagicOS version
+from [Releases](../../releases), unpack it on the host, and run
 
 ```sh
-adb push h80gt_setup.sh /sdcard/
-adb shell sh /sdcard/h80gt_setup.sh     # or from a Shizuku (rish) shell
+./setup.sh            # checks the kernel version, pushes everything,
+                      # runs the chain, retries on the occasional miss
 ```
 
 Build from source instead:
@@ -90,9 +108,11 @@ sublevel and the device's own kernel config. See `ksu/README.md`.
 
 ## Verification status
 
-- Full chain (UAF → KASLR → arbitrary R/W → cred → SELinux permissive →
-sig_enforce → KernelSU live, enforcing restored) verified on the real
-device, on MagicOS 8.0.0.128 and 8.0.0.160.
+Full chain (UAF → KASLR → arbitrary R/W → cred → SELinux permissive →
+sig_enforce → KernelSU live, enforcing restored, boot_id restored)
+verified on a real device for every version in the table above. A run
+can miss early and reboot the phone (roughly one in four); the setup
+script retries automatically, or just run it again.
 
 ## Credits
 
