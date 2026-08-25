@@ -66,7 +66,7 @@ build_exploit_env(){
   EXPLOIT_ENV="$EXPLOIT_ENV KSU_LOADER=1 KSU_RUNDIR=$RUNDIR LINK_COMMIT_CRED=$LINK_COMMIT_CRED LINK_BOOTID_CTL=$LINK_BOOTID_CTL LINK_BOOTID_BUF=$LINK_BOOTID_BUF"
 }
 
-# ---- symbol link addresses (vmlinux-verified); runtime = link + slide ----
+# ---- symbol link addresses; runtime = link + slide ----
 # The custom .ko has exactly ONE undefined symbol stripped from device
 # kallsyms: commit_creds (T, exported). boot_id ctl/buf (statics, stripped)
 # are restored by the module (init.c restore_bootid).
