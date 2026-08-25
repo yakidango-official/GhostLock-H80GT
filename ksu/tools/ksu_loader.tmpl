@@ -74,7 +74,7 @@ OUT=$RD/ksu_load.log
   KMSG_PID=$!
   sleep 1
   if [ @ALLOW_SHELL@ = 1 ]; then KSU_PARAMS="allow_shell=1 "; else KSU_PARAMS=""; fi
-  KSU_PARAMS="${KSU_PARAMS}h80gt_bootid_ctl=$BOOTID_CTL_RT h80gt_bootid_buf=$BOOTID_BUF_RT"
+  KSU_PARAMS="${KSU_PARAMS}bootid_ctl=$BOOTID_CTL_RT bootid_buf=$BOOTID_BUF_RT"
   echo "ksu params: $KSU_PARAMS"
   $RD/load_ko $RD/kernelsu.ko "$KSU_PARAMS" > $RD/loadko_result.log 2>&1
   echo "load_ko_exit=$?"
@@ -83,6 +83,11 @@ OUT=$RD/ksu_load.log
   echo "=== loadko_result.log ==="; cat $RD/loadko_result.log 2>&1
   echo "=== KSU userspace bring-up ==="
   if grep -qi kernelsu /proc/modules && [ @STAGES@ = 1 ]; then
+    # ZygiskNext (zygisksu) must not come up on a late (post-boot) KSU load
+    # — it belongs to a boot-time boot chain and wedges the session. Disable
+    # it BEFORE the ksud stages mount modules; remove the flag when KSU is
+    # the boot-time provider again.
+    [ -d /data/adb/modules/zygisksu ] && touch /data/adb/modules/zygisksu/disable
     $RD/ksud post-fs-data 2>&1; echo "pfd=$?"
     $RD/ksud services 2>&1; echo "svc=$?"
     $RD/ksud boot-completed 2>&1; echo "bc=$?"
@@ -98,11 +103,11 @@ OUT=$RD/ksu_load.log
   umount /proc/kallsyms 2>&1 && echo "umount OK"
   echo $KR > /proc/sys/kernel/kptr_restrict 2>&1 && echo "kptr restored=$KR"
   echo "=== GC stale poisoned inodes + old rundirs ==="
-  rm -f /data/local/tmp/{diag.sh,h80gt_exploit,h80gt_sysctl.log,kallsyms_add.txt,kernelsu.ko,kernelsu_neutered.ko,kmsg_dumper,ksu.rules,ksu_dev_inject.sh,ksu_dev_loader.sh,ksud,ksud_help.txt,load_ko,loadko_result.log,magiskpolicy,neut.sh,neut_result.log,policy_after_full.bin,result.done,ksu_rules} 2>&1
+  rm -f /data/local/tmp/{diag.sh,gl_exploit,gl_sysctl.log,kallsyms_add.txt,kernelsu.ko,kernelsu_neutered.ko,kmsg_dumper,ksu.rules,ksu_dev_inject.sh,ksu_dev_loader.sh,ksud,ksud_help.txt,load_ko,loadko_result.log,magiskpolicy,neut.sh,neut_result.log,policy_after_full.bin,result.done,ksu_rules} 2>&1
   ls -d /data/local/tmp/ksu_run_* 2>/dev/null | grep -v "@STAMP@" | while read d; do rm -rf "$d"; done
   echo "GC done"
   echo "=== process cleanup (immediate) ==="
-  pkill -9 -f 'h80gt_ex[p]loit' 2>/dev/null; echo "exploit remnants swept"
+  pkill -9 -f 'gl_ex[p]loit' 2>/dev/null; echo "exploit remnants swept"
   kill $KMSG_PID 2>/dev/null; pkill -f ksucmdwatch 2>/dev/null
   echo "kmsg_dumper + cmd watcher stopped"
   echo "=== thaw hisecd (a frozen hisecd wedges Honor's periodic ==="
