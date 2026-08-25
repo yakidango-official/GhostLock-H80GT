@@ -4,17 +4,20 @@
 
 适用于荣耀80 GT（AGT-AN00）的本地提权exploit（CVE-2026-43499，内核rtmutex `remove_waiter`路径的UAF），以及配套的KernelSU内核模块加载方案。
 
-原理上，本项目的漏洞和利用手法对9.0.0.220及之前的所有MagicOS版本都成立：同一大版本内内核结构体布局不变，变的只是符号地址。但每个固件都需要自己的偏移表和经过验证的载体，所以仓库只提供在真机上实际跑通过的版本：
+原理上，本项目的漏洞和利用手法对9.0.0.220及之前的所有MagicOS版本都成立。已适配的版本：
 
 | MagicOS | 内核 | 状态 |
 |---|---|---|
-| 8.0.0.128 | 5.10.168 | 真机验证 |
-| 8.0.0.160 | 5.10.209 | 真机验证 |
-| 9.0.0.157 | 5.10.209 | 真机验证 |
-| 9.0.0.200SP1 | 5.10.236 | 真机验证 |
-| 9.0.0.220SP2 / SP4 | 5.10.236 | 真机验证（SP4与SP2的boot镜像相同） |
-
-9.0系其他版本理论上重新生成偏移表（`src/targets/`）并确认载体槽位后即可支持，5.10.226/236的处理过程见提交历史。
+| 8.0.0.128 | 5.10.168 | ✅ 已验证 |
+| 8.0.0.160 | 5.10.209 | ✅ 已验证 |
+| 9.0.0.157 | 5.10.209 | ✅ 已验证 |
+| 9.0.0.200SP1 | 5.10.236 | ✅ 已验证 |
+| 9.0.0.220SP2 / SP4 | 5.10.236 | ✅ 已验证（SP4与SP2的boot镜像相同） |
+| 8.0.0.131 | 5.10.198 | ⚠️ 未验证 |
+| 8.0.0.161 | 5.10.209 | ⚠️ 未验证 |
+| 9.0.0.102 / 120 / 130 / 165 | 5.10.209 | ⚠️ 未验证 |
+| 9.0.0.175SP1 / 187 | 5.10.226 | ⚠️ 未验证 |
+| 9.0.0.210 | 5.10.236 | ⚠️ 未验证 |
 
 > ⚠️ **警告**
 >
@@ -38,12 +41,20 @@ ksu/         自编译kernelsu.ko与PC侧adb加载脚本
 
 需要：Docker、Android Platform Tools。
 
-预构建包按固件版本发布：在[Releases](../../releases)里下载对应MagicOS版本的包，在电脑上解压后运行
+预构建包一个包覆盖所有支持的固件：在[Releases](../../releases)里下载，在电脑上解压后运行
 
 ```sh
-./setup.sh            # 校验内核版本、推送全部文件、启动整条链，
-                      # 偶发失败会自动重试
+./setup.sh            # 电脑上运行（需adb）：识别内核、自动选择对应的
+                      # exploit、启动整条链，偶发失败会自动重试
 ```
+
+没有电脑的话，把包解压到手机上，用Shizuku的shell（rish）跑同一个脚本即可——脚本会自动识别运行环境：
+
+```sh
+sh /sdcard/ghostlock/setup.sh
+```
+
+脚本按运行中的内核匹配清单：已验证版本直接执行，已知但未验证的版本会先确认，其余拒绝执行。
 
 要自己编译的话：
 
@@ -55,7 +66,7 @@ cd exploit && ./docker-build.sh bin             # 生成exploit_static(8.0.0.128
 #     首次运行会下载NDK,约1.2GB)
 
 # 2. 准备KSU相关文件到ksu/tools/
-#    见ksu/tools/README.md(kernelsu_h80gt.ko的编译方法见ksu/README.md,
+#    见ksu/tools/README.md(kernelsu.ko的编译方法见ksu/README.md,
 #    需用与固件内核子版本匹配的开源树编译;
 #    ksud已随仓库提供;magiskpolicy已随仓库提供;
 #    load_ko/kmsg_dumper由./docker-build.sh tools编译)
@@ -87,5 +98,5 @@ bash ../ksu/ksu_load_ko.sh
 ## 许可证
 
 - `exploit/`与文档：**Apache License 2.0**（见[LICENSE](LICENSE)），与上游PoC一致。
-- `ksu/`：**GPL-2.0**（见[ksu/LICENSE](ksu/LICENSE)），`init-h80gt.patch`与`ksu_rules.annotated`衍生自KernelSU的`kernel/`目录。
+- `ksu/`：**GPL-2.0**（见[ksu/LICENSE](ksu/LICENSE)），`init-bootid.patch`与`ksu_rules.annotated`衍生自KernelSU的`kernel/`目录。
 

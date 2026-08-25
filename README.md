@@ -7,22 +7,20 @@ CVE-2026-43499 — a use-after-free in the kernel `rtmutex` `remove_waiter`
 path — plus a companion KernelSU kernel-module loading solution.
 
 In principle the bug and the techniques here apply to every MagicOS build
-up to 9.0.0.220: within a MagicOS major version the kernel structs stay
-put and only symbol addresses move. In practice each firmware needs its
-own offset table and a verified carrier, so this repo only ships targets
-that have actually been run on a real device:
+up to 9.0.0.220. Adapted versions:
 
 | MagicOS | Kernel | Status |
 |---|---|---|
-| 8.0.0.128 | 5.10.168 | verified on device |
-| 8.0.0.160 | 5.10.209 | verified on device |
-| 9.0.0.157 | 5.10.209 | verified on device |
-| 9.0.0.200SP1 | 5.10.236 | verified on device |
-| 9.0.0.220SP2 / SP4 | 5.10.236 | verified on device (SP4 ships the same boot image as SP2) |
-
-Other versions in the 9.0 line are expected to work after regenerating
-the offset table (`src/targets/`) and re-checking the kstack carrier
-slot; see the commit history for how 5.10.226/236 were handled.
+| 8.0.0.128 | 5.10.168 | ✅ verified |
+| 8.0.0.160 | 5.10.209 | ✅ verified |
+| 9.0.0.157 | 5.10.209 | ✅ verified |
+| 9.0.0.200SP1 | 5.10.236 | ✅ verified |
+| 9.0.0.220SP2 / SP4 | 5.10.236 | ✅ verified (SP4 ships the same boot image as SP2) |
+| 8.0.0.131 | 5.10.198 | ⚠️ not verified on a real device |
+| 8.0.0.161 | 5.10.209 | ⚠️ not verified on a real device |
+| 9.0.0.102 / 120 / 130 / 165 | 5.10.209 | ⚠️ not verified on a real device |
+| 9.0.0.175SP1 / 187 | 5.10.226 | ⚠️ not verified on a real device |
+| 9.0.0.210 | 5.10.236 | ⚠️ not verified on a real device |
 
 > ⚠️ **Warning**
 >
@@ -58,13 +56,26 @@ ksu/         custom kernelsu.ko build (MagicOS kernel + device config) and the
 
 Requirements: Docker, Android Platform Tools.
 
-Prebuilt bundles per firmware: grab the one matching your MagicOS version
-from [Releases](../../releases), unpack it on the host, and run
+One prebuilt bundle covers every supported firmware: grab it from
+[Releases](../../releases), unpack it on the host, and run
 
 ```sh
-./setup.sh            # checks the kernel version, pushes everything,
-                      # runs the chain, retries on the occasional miss
+./setup.sh            # PC, with adb: identifies the kernel, picks the
+                      # matching exploit, runs the chain, retries on the
+                      # occasional miss
 ```
+
+No PC around? Unpack the bundle on the phone and run the same script from
+a Shizuku shell (rish) — it detects where it is and does the rest
+locally:
+
+```sh
+sh /sdcard/ghostlock/setup.sh
+```
+
+The script matches the running kernel against the bundled manifest:
+verified firmwares run directly, known-but-untested ones ask for
+confirmation, anything else is refused.
 
 Build from source instead:
 
@@ -76,7 +87,7 @@ cd exploit && ./docker-build.sh bin             # exploit_static (8.0.0.128)
 #     env config baked in; first run pulls the NDK, ~1.2GB)
 
 # 2. Obtain/build the KSU bundle binaries into ksu/tools/ —
-#    see ksu/tools/README.md (kernelsu_h80gt.ko: ksu/README.md — build it
+#    see ksu/tools/README.md (kernelsu.ko: ksu/README.md — build it
 #    against the opensource tree matching your firmware's kernel sublevel;
 #    ksud: shipped in the repo; magiskpolicy: shipped in the repo; load_ko/kmsg_dumper:
 #    ./docker-build.sh tools)
@@ -126,6 +137,6 @@ script retries automatically, or just run it again.
 under the **Apache License 2.0** (see [LICENSE](LICENSE)), same as the
 upstream IonStack PoC this port derives from.
 - The files under [`ksu/`](ksu/) are **GPL-2.0** (see
-[ksu/LICENSE](ksu/LICENSE)): `init-h80gt.patch` and the `ksu_rules.annotated` policy
+[ksu/LICENSE](ksu/LICENSE)): `init-bootid.patch` and the `ksu_rules.annotated` policy
 set derive from KernelSU's `kernel/` directory, which is GPL-2.0.
 
