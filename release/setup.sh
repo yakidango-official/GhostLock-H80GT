@@ -172,7 +172,7 @@ done
 # Old rundirs were only kept for forensics, and this run's loader already
 # salvaged any crash evidence out of them at startup (prev_* files).  Keep
 # the current one (it holds this run's logs) and drop the rest.
-dev "ls -d $RD_ROOT/ksu_run_* 2>/dev/null | grep -v '^$RD\$' | xargs rm -rf 2>/dev/null; true"
+dev "ls -d $RD_ROOT/ksu_run_* 2>/dev/null | grep -v '^$RD\$' | xargs rm -rf 2>/dev/null; rm -f $RD_ROOT/result.done $RD_ROOT/gl_anchor.log $RD_ROOT/gl_root_proof $RD_ROOT/.ksu_patched.ko; true"
 
 echo
 echo "== done. Test:"
