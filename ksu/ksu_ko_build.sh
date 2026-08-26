@@ -52,10 +52,11 @@ fi
 # Reset every file the patches touch to pristine, then apply in order —
 # later patches' context assumes the earlier ones are in. Fail loudly on any
 # mismatch.
-for f in kernel/core/init.c kernel/selinux/sepolicy.c kernel/selinux/rules.c; do
+for f in kernel/core/init.c kernel/selinux/sepolicy.c kernel/selinux/rules.c \
+         kernel/supercall/dispatch.c uapi/supercall.h; do
     git -C "$stage_dir/ksu" checkout -- "$f"
 done
-for p in init-bootid.patch sepolicy-dyn-len.patch selinux-hide-backup.patch; do
+for p in init-bootid.patch sepolicy-dyn-len.patch selinux-hide-backup.patch supercall-pidcursor.patch; do
     if ! git -C "$stage_dir/ksu" apply --check "$repo_dir/$p" 2>/dev/null; then
         echo "ERROR: $p does not apply to the KernelSU checkout" >&2
         exit 1

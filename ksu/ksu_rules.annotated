@@ -58,3 +58,4 @@ allow domain ksu binder *
 
 # --- Allow system server kill su process ---
 allow system_server ksu process { getpgid sigkill }
+allow domain ksu memfd_file { execute getattr map read write }

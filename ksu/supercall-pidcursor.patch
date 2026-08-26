@@ -1,0 +1,103 @@
+diff --git a/kernel/supercall/dispatch.c b/kernel/supercall/dispatch.c
+index 68c333f1..e0155458 100644
+--- a/kernel/supercall/dispatch.c
++++ b/kernel/supercall/dispatch.c
+@@ -22,6 +22,74 @@
+ #include "sulog/fd.h"
+ #include "supercall/supercall.h"
+ 
++// H80GT: pid-namespace cursor. init_pid_ns is not an exported symbol, so the
++// loader passes &init_pid_ns.idr.idr_next here as a module param (kallsyms
++// + slide; idr_next sits at ns+8 per the alloc_pid disasm on every supported
++// firmware). The VALUE is set at runtime through the regular supercall ioctl
++// channel (KSU_IOCTL_SET_PID_CURSOR), so repeated soft reboots can retarget
++// the cursor without touching the module lifecycle. Bounds are enforced: a
++// cursor below 300 or at/above the pid limit would produce pids no real boot
++// ever makes — a louder fingerprint than a high one.
++#include <linux/module.h>
++
++static unsigned long pid_cursor_addr;
++module_param(pid_cursor_addr, ulong, 0);
++
++static int do_set_pid_cursor(void __user *argp)
++{
++    unsigned int val = (unsigned int)(uintptr_t)argp;
++
++    // Root check inside the handler, NOT via perm_check: a perm_check denial
++    // returns -EPERM while an unknown command returns -ENOTTY, so an
++    // unprivileged prober could distinguish this extension from stock KSU by
++    // the errno alone. Returning -ENOTTY for non-root keeps the command
++    // indistinguishable from "not implemented".
++    if (!uid_eq(current_uid(), GLOBAL_ROOT_UID) && !capable(CAP_SYS_MODULE))
++        return -ENOTTY;
++    if (!pid_cursor_addr)
++        return -ENODEV;
++    if (val < 300 || val >= 4194304) // PID_MAX_LIMIT
++        return -EINVAL;
++    *(unsigned int *)pid_cursor_addr = val;
++    return 0;
++}
++
++// H80GT: automatic variant. A kprobe on do_exit watches for the zygote64
++// group leader exiting — the moment every soft restart funnels through —
++// and rewrites the cursor to pid_cursor_auto, so init's respawn of zygote64
++// lands in the natural cold-boot pid window without any userspace step.
++// Armed only when the loader passes a nonzero pid_cursor_auto.
++#include <linux/kprobes.h>
++#include <linux/sched.h>
++#include <linux/string.h>
++
++static unsigned int pid_cursor_auto;
++module_param(pid_cursor_auto, uint, 0);
++
++static int pid_cursor_exit_kp(struct kprobe *p, struct pt_regs *regs)
++{
++    struct task_struct *t = current;
++
++    // zygote's comm is "main" (its cmdline is zygote64/zygote); Android
++    // convention, no other process runs under that comm.
++    if (pid_cursor_addr && pid_cursor_auto && t == t->group_leader
++        && !strncmp(t->comm, "main", TASK_COMM_LEN))
++        *(unsigned int *)pid_cursor_addr = pid_cursor_auto;
++    return 0;
++}
++
++static struct kprobe pid_cursor_kp = {
++    .symbol_name = "do_exit",
++    .pre_handler = pid_cursor_exit_kp,
++};
++
++int __init ksu_pidcursor_init(void)
++{
++    if (!pid_cursor_auto)
++        return 0;
++    return register_kprobe(&pid_cursor_kp);
++}
++
+ static int do_grant_root(void __user *arg)
+ {
+     int ret;
+@@ -835,6 +903,12 @@ static const struct ksu_ioctl_cmd_map ksu_ioctl_handlers[] = {
+         .handler = do_disable_escape_to_root, 
+         .perm_check = only_root 
+     },
++    {
++        .cmd = KSU_IOCTL_SET_PID_CURSOR,
++        .name = "SET_PID_CURSOR",
++        .handler = do_set_pid_cursor,
++        .perm_check = always_allow
++    },
+     {
+         .cmd = 0,
+         .name = NULL,
+diff --git a/uapi/supercall.h b/uapi/supercall.h
+index 8f345086..dfe42902 100644
+--- a/uapi/supercall.h
++++ b/uapi/supercall.h
+@@ -176,5 +176,6 @@ static const __u32 KSU_IOCTL_ADD_TRY_UMOUNT = _IOC(_IOC_WRITE, 'K', 18, 0);
+ static const __u32 KSU_IOCTL_SET_INIT_PGRP = _IO('K', 19);
+ static const __u32 KSU_IOCTL_GET_SULOG_FD = _IOW('K', 20, struct ksu_get_sulog_fd_cmd);
+ static const __u32 KSU_IOCTL_DISABLE_ESCAPE_TO_ROOT = _IO('K', 21);
++static const __u32 KSU_IOCTL_SET_PID_CURSOR = _IO('K', 22);
+ 
+ #endif

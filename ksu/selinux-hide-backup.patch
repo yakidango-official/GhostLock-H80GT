@@ -1,4 +1,4 @@
-diff --git a/rules.orig.c b/rules.fixed.c
+diff --git a/kernel/selinux/rules.c b/kernel/selinux/rules.c
 index 762a7c5..389c3c8 100644
 --- a/kernel/selinux/rules.c
 +++ b/kernel/selinux/rules.c
@@ -98,7 +98,7 @@ index 762a7c5..389c3c8 100644
  #define SELINUX_POLICY_INSTEAD_SELINUX_SS
  
  #define ALL NULL
-diff --git a/init.orig.c b/init.fixed.c
+diff --git a/kernel/core/init.c b/kernel/core/init.c
 index 21ce3ac..65cb689 100644
 --- a/kernel/core/init.c
 +++ b/kernel/core/init.c
