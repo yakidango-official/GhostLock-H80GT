@@ -92,6 +92,16 @@ OUT=$RD/ksu_load.log
     $RD/ksud boot-completed 2>&1; echo "bc=$?"
     $RD/ksud install 2>&1; echo "install=$?"
     ls -la /data/adb/ksud 2>&1
+    # CN builds: Honor's parseReadAppsPermission (framework PackageParser) calls
+    # ActivityManager.isSystemReady() -> LocalServices lookup that only exists
+    # in system_server. LSPosed's daemon parses module APKs in its own process,
+    # so every parse of an APK requesting Honor's GET_INSTALLED_APPS permission
+    # dies with NPE -> "failed to parse ... Failed to read manifest" -> module
+    # never hooks (Thanox etc). Flip the region prop so HnPackageUtils'
+    # isChinaVersion() short-circuits before that call. Runtime property-area
+    # change only — no partition writes, restored by reboot; user locale comes
+    # from Settings and is unaffected. Needs redoing every session (here).
+    $RD/ksud resetprop ro.product.locale.region US 2>&1 && echo "locale.region flipped (LSPosed daemon parse fix)"
   else
     echo "module missing or KSU_STAGES=0 — skipping stages"
     grep -qi kernelsu /proc/modules || echo "NOTE: no .ko loaded -> boot_id stays hijacked (no restore) — REBOOT MANDATORY"
