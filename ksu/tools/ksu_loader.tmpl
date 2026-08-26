@@ -131,28 +131,36 @@ OUT=$RD/ksu_load.log
     kill -CONT $hp 2>/dev/null && echo "hisecd THAWED pid=$hp"
   fi
   : > ${RD%/*}/result.done 2>/dev/null   # end-marker for host-side poll loops (written pre-enforce, while kernel-domain opens still work)
-  # ADB root: the .ko's execve hook injects LD_PRELOAD only into adbd execs
-  # that happen AFTER the feature is armed (ksud pfd set it from
-  # .feature_config during the stages above). adbd has been running since
-  # boot, so the armed hook never fires for it — restart adbd so the fresh
-  # exec picks up libadbroot.so and adb comes up rooted (survives all later
-  # soft reboots). Placed AFTER result.done on purpose: bouncing adbd drops
-  # the adb transport ~2s and host-side pollers must already be done; still
-  # BEFORE enforce so this log line lands on disk.
-  # Restart via kill, not "setprop ctl.restart adbd": Honor's init rejects
-  # control properties from the kernel domain ("Invalid permissions to
-  # perform 'restart' on 'adbd'", even while permissive). init's service
-  # supervisor re-spawns adbd on death (adbd is not critical), and the
-  # re-exec goes through the armed hook. Device-verified under enforcing.
-  echo "restarting adbd to pick up adb_root (expect ~2s adb drop — normal)"
-  ap=$(pidof adbd); [ -n "$ap" ] && kill "$ap"; echo "adbd pid=$ap killed rc=$? (init restarts it through the armed hook)"
   if grep -qi kernelsu /proc/modules && [ @ENFORCE@ = 1 ]; then
-    echo "=== enforce SELinux (ABSOLUTE LAST: builtins only from here) ==="
+    echo "=== enforce SELinux (everything must be restored before the adbd bounce below) ==="
     echo 1 > /sys/fs/selinux/enforce 2>&1
     read EBACK < /sys/fs/selinux/enforce 2>&1; echo "enforce readback=$EBACK"
+    # ADB root bounce — the loader's ABSOLUTE LAST act. The .ko's execve hook
+    # injects LD_PRELOAD only into adbd execs that happen AFTER the feature
+    # is armed (ksud pfd set it from .feature_config during the stages);
+    # adbd has been running since boot, so bounce it so the fresh exec picks
+    # up libadbroot.so and adb comes up rooted (survives all later soft
+    # reboots). Via kill, not "setprop ctl.restart adbd": Honor's init
+    # rejects control properties from the kernel domain ("Invalid
+    # permissions to perform 'restart' on 'adbd'", even while permissive);
+    # init's supervisor re-spawns adbd on death (not critical) and the
+    # re-exec goes through the armed hook.
+    # WHY LAST: on device-side runs (Shizuku/aShell live inside adbd) the
+    # kill takes the loader's own process group down too — SIGKILL, which
+    # nohup cannot block (observed: 62 "Killed" lines, loader dead before
+    # enforcing, session stranded permissive). PC-side runs survive (plain
+    # adbd only SIGHUPs its ptys). Bouncing after enforce means the
+    # worst case is losing the log lines after this point — never an
+    # un-enforced session. Skip if the enforce readback failed.
+    if [ "$EBACK" = "1" ]; then
+      echo "restarting adbd to pick up adb_root (expect ~2s adb drop — normal)"
+      ap=$(pidof adbd); [ -n "$ap" ] && kill "$ap"; echo "adbd pid=$ap killed rc=$? (init restarts it through the armed hook)"
+    else
+      echo "enforce readback != 1 — NOT bouncing adbd"
+    fi
   else
     echo "KSU_ENFORCE=0 or module missing — leaving permissive"
   fi
-  echo "=== final ==="; grep -i kernelsu /proc/modules 2>&1; cut -d. -f1 /proc/uptime
+  echo "=== final ==="; grep -qi kernelsu /proc/modules && echo "kernelsu LIVE"; cut -d. -f1 /proc/uptime
 } >> $OUT 2>&1
 echo "KSU_LOAD_DONE $OUT"
