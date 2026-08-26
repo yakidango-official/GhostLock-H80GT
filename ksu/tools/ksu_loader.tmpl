@@ -139,8 +139,13 @@ OUT=$RD/ksu_load.log
   # soft reboots). Placed AFTER result.done on purpose: bouncing adbd drops
   # the adb transport ~2s and host-side pollers must already be done; still
   # BEFORE enforce so this log line lands on disk.
+  # Restart via kill, not "setprop ctl.restart adbd": Honor's init rejects
+  # control properties from the kernel domain ("Invalid permissions to
+  # perform 'restart' on 'adbd'", even while permissive). init's service
+  # supervisor re-spawns adbd on death (adbd is not critical), and the
+  # re-exec goes through the armed hook. Device-verified under enforcing.
   echo "restarting adbd to pick up adb_root (expect ~2s adb drop — normal)"
-  setprop ctl.restart adbd; echo "ctl.restart adbd rc=$?"
+  ap=$(pidof adbd); [ -n "$ap" ] && kill "$ap"; echo "adbd pid=$ap killed rc=$? (init restarts it through the armed hook)"
   if grep -qi kernelsu /proc/modules && [ @ENFORCE@ = 1 ]; then
     echo "=== enforce SELinux (ABSOLUTE LAST: builtins only from here) ==="
     echo 1 > /sys/fs/selinux/enforce 2>&1
