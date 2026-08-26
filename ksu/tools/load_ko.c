@@ -1,4 +1,4 @@
-// load_ko.c — minimal kernelsu.ko loader for the H80GT (Honor 80 GT).
+// load_ko.c — minimal kernelsu.ko loader for the Honor 80 GT.
 //
 // Replicates KernelSU's ksuinit::load_module: the .ko has SHN_UNDEF symbols
 // the kernel's module loader can't resolve because Honor (a) strips

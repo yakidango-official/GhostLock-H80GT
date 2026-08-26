@@ -108,6 +108,14 @@ OUT=$RD/ksu_load.log
     # change only — no partition writes, restored by reboot; user locale comes
     # from Settings and is unaffected. Needs redoing every session (here).
     $RD/ksud resetprop ro.product.locale.region US 2>&1 && echo "locale.region flipped (LSPosed daemon parse fix)"
+    # ADB root: the .ko's execve hook injects LD_PRELOAD only into adbd execs
+    # that happen AFTER the feature is armed (ksud pfd sets it from
+    # .feature_config just above). adbd has been running since boot, so the
+    # armed hook never fires for it — restart adbd now; the fresh exec picks
+    # up libadbroot.so and adb comes up rooted (survives all later soft
+    # reboots). Without this the manager toggle must be re-flipped after every
+    # re-jailbreak just to bounce adbd.
+    setprop ctl.restart adbd; echo "ctl.restart adbd rc=$?"
   else
     echo "module missing or KSU_STAGES=0 — skipping stages"
     grep -qi kernelsu /proc/modules || echo "NOTE: no .ko loaded -> boot_id stays hijacked (no restore) — REBOOT MANDATORY"

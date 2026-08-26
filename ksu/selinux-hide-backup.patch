@@ -16,7 +16,7 @@ index 762a7c5..389c3c8 100644
  
  struct selinux_policy *backup_sepolicy;
  
-+// H80GT late-load: install the selinux_hide backup from a userspace-captured
++// Late-load: install the selinux_hide backup from a userspace-captured
 +// PRISTINE policy blob (read from /sys/fs/selinux/policy before any root rule
 +// is injected). apply_kernelsu_rules() cannot create the backup on this device
 +// — its rcu swap without security_load_policy() breaks every running SID — so
@@ -79,7 +79,7 @@ index 762a7c5..389c3c8 100644
 +        goto out_free_sidtab;
 +
 +    backup_sepolicy = pol;
-+    pr_info("H80GT: backup sepolicy installed from %s (len=%lld)\n", path, size);
++    pr_info("backup sepolicy installed from %s (len=%lld)\n", path, size);
 +    vfree(data);
 +    return 0;
 +
@@ -91,7 +91,7 @@ index 762a7c5..389c3c8 100644
 +    kfree(pol);
 +out_free:
 +    vfree(data);
-+    pr_err("H80GT: install backup sepolicy failed: %d\n", ret);
++    pr_err("install backup sepolicy failed: %d\n", ret);
 +    return ret;
 +}
 +
@@ -115,7 +115,7 @@ index 21ce3ac..65cb689 100644
  static unsigned long bootid_buf;
  module_param(bootid_buf, ulong, 0);
  
-+// H80GT: path to a pristine /sys/fs/selinux/policy snapshot captured before
++// path to a pristine /sys/fs/selinux/policy snapshot captured before
 +// any root rule injection; loaded at init as the selinux_hide backup.
 +static char *pristine_policy;
 +module_param(pristine_policy, charp, 0);
@@ -126,11 +126,11 @@ index 21ce3ac..65cb689 100644
 @@ -173,6 +180,11 @@ int __init kernelsu_init(void)
          // reboot does not heal). The same rules are instead injected BEFORE
          // this module loads via magiskpolicy --live (device-verified clean).
-         pr_info("H80GT: not touching live sepolicy (rules pre-injected)\n");
+         pr_info("not touching live sepolicy (rules pre-injected)\n");
 +        if (pristine_policy) {
 +            // best effort: selinux_hide stays -EAGAIN without it, never fatal
 +            if (ksu_install_backup_sepolicy(pristine_policy))
-+                pr_err("H80GT: selinux_hide backup unavailable\n");
++                pr_err("selinux_hide backup unavailable\n");
 +        }
          restore_bootid();
          cache_sid();

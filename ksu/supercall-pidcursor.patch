@@ -6,7 +6,7 @@ index 68c333f1..e0155458 100644
  #include "sulog/fd.h"
  #include "supercall/supercall.h"
  
-+// H80GT: pid-namespace cursor. init_pid_ns is not an exported symbol, so the
++// pid-namespace cursor. init_pid_ns is not an exported symbol, so the
 +// loader passes &init_pid_ns.idr.idr_next here as a module param (kallsyms
 +// + slide; idr_next sits at ns+8 per the alloc_pid disasm on every supported
 +// firmware). The VALUE is set at runtime through the regular supercall ioctl
@@ -38,7 +38,7 @@ index 68c333f1..e0155458 100644
 +    return 0;
 +}
 +
-+// H80GT: automatic variant. A kprobe on do_exit watches for the zygote64
++// automatic variant. A kprobe on do_exit watches for the zygote64
 +// group leader exiting — the moment every soft restart funnels through —
 +// and rewrites the cursor to pid_cursor_auto, so init's respawn of zygote64
 +// lands in the natural cold-boot pid window without any userspace step.
