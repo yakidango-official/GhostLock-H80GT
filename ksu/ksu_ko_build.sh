@@ -58,6 +58,17 @@ if ! git -C "$stage_dir/ksu" apply --check "$repo_dir/init-bootid.patch" 2>/dev/
 fi
 git -C "$stage_dir/ksu" apply "$repo_dir/init-bootid.patch"
 
+# Same reset-then-apply discipline for the sepolicy patch: it fixes
+# ksu_dup_sepolicy sizing its buffer by the stale policydb.len, which
+# breaks all dynamic rule application (and policy dumps) after the
+# first injection.
+git -C "$stage_dir/ksu" checkout -- kernel/selinux/sepolicy.c
+if ! git -C "$stage_dir/ksu" apply --check "$repo_dir/sepolicy-dyn-len.patch" 2>/dev/null; then
+    echo "ERROR: sepolicy-dyn-len.patch does not apply to the KernelSU checkout" >&2
+    exit 1
+fi
+git -C "$stage_dir/ksu" apply "$repo_dir/sepolicy-dyn-len.patch"
+
 docker rm -f "$container_name" >/dev/null 2>&1 || true
 
 docker run --rm \

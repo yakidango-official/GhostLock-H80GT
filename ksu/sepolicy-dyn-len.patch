@@ -1,0 +1,60 @@
+--- a/kernel/selinux/sepolicy.c
++++ b/kernel/selinux/sepolicy.c
+@@ -877,12 +877,23 @@ struct selinux_policy *ksu_dup_sepolicy(struct selinux_policy *old_pol)
+ {
+     int ret;
+     size_t len;
++    size_t alloc_len, used;
+     struct selinux_policy *new_pol;
+     void *data;
+     struct policy_file fp;
+ 
+     len = old_pol->policydb.len;
+-    data = vmalloc(len);
++    // policydb.len is the blob size as of the last policy LOAD. Rules
++    // injected since then grow the serialized image past it, and
++    // policydb_write() fails with -EINVAL once put_entry() crosses
++    // fp->len (policydb.h). Over-allocate so a policy already grown by
++    // previous injections still serializes, and remember the TRUE size
++    // so the copy carries a fresh policydb.len. Without this, every
++    // dynamic rule application after the first dies here, and
++    // /sys/fs/selinux/policy reads break the same way (they size their
++    // buffer by policydb.len too).
++    alloc_len = len + (1 << 20);
++    data = vmalloc(alloc_len);
+     if (!data) {
+         pr_err("alloc policy len %ld\n", len);
+         ret = -ENOMEM;
+@@ -890,13 +901,14 @@ struct selinux_policy *ksu_dup_sepolicy(struct selinux_policy *old_pol)
+     }
+ 
+     fp.data = data;
+-    fp.len = len;
++    fp.len = alloc_len;
+ 
+     ret = policydb_write(&old_pol->policydb, &fp);
+     if (ret) {
+         pr_err("sepolicy: policydb_write: %d\n", ret);
+         goto out_free_data;
+     }
++    used = alloc_len - fp.len; // put_entry() decremented fp.len by the bytes written
+ 
+     // https://android-review.googlesource.com/c/kernel/common/+/3009995/11/security/selinux/ss/policydb.c
+     // fixup config
+@@ -926,14 +938,14 @@ struct selinux_policy *ksu_dup_sepolicy(struct selinux_policy *old_pol)
+ 
+     // rewind fp
+     fp.data = data;
+-    fp.len = len;
++    fp.len = used;
+ 
+     ret = policydb_read(&new_pol->policydb, &fp);
+     if (ret) {
+         pr_err("sepolicy: policydb_read: %d\n", ret);
+         goto out_free_policydb;
+     }
+-    new_pol->policydb.len = old_pol->policydb.len;
++    new_pol->policydb.len = used;
+     kvfree(data);
+ 
+     return new_pol;
