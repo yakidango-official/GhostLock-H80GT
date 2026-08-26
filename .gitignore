@@ -8,3 +8,4 @@ ksu/tools/kmsg_dumper
 
 .DS_Store
 ksu/.build/
+build/

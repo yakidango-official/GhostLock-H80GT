@@ -83,6 +83,10 @@ OUT=$RD/ksu_load.log
   echo "=== loadko_result.log ==="; cat $RD/loadko_result.log 2>&1
   echo "=== KSU userspace bring-up ==="
   if grep -qi kernelsu /proc/modules && [ @STAGES@ = 1 ]; then
+    # ZygiskNext must not come up on a late (post-boot) KSU load — it wedges
+    # the session. Disable it before the ksud stages; the hotreboot module
+    # re-enables and rebuilds it after its soft reboot.
+    [ -d /data/adb/modules/zygisksu ] && touch /data/adb/modules/zygisksu/disable
     $RD/ksud post-fs-data 2>&1; echo "pfd=$?"
     $RD/ksud services 2>&1; echo "svc=$?"
     $RD/ksud boot-completed 2>&1; echo "bc=$?"
