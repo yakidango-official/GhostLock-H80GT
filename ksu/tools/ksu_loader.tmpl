@@ -108,14 +108,6 @@ OUT=$RD/ksu_load.log
     # change only — no partition writes, restored by reboot; user locale comes
     # from Settings and is unaffected. Needs redoing every session (here).
     $RD/ksud resetprop ro.product.locale.region US 2>&1 && echo "locale.region flipped (LSPosed daemon parse fix)"
-    # ADB root: the .ko's execve hook injects LD_PRELOAD only into adbd execs
-    # that happen AFTER the feature is armed (ksud pfd sets it from
-    # .feature_config just above). adbd has been running since boot, so the
-    # armed hook never fires for it — restart adbd now; the fresh exec picks
-    # up libadbroot.so and adb comes up rooted (survives all later soft
-    # reboots). Without this the manager toggle must be re-flipped after every
-    # re-jailbreak just to bounce adbd.
-    setprop ctl.restart adbd; echo "ctl.restart adbd rc=$?"
   else
     echo "module missing or KSU_STAGES=0 — skipping stages"
     grep -qi kernelsu /proc/modules || echo "NOTE: no .ko loaded -> boot_id stays hijacked (no restore) — REBOOT MANDATORY"
@@ -139,6 +131,15 @@ OUT=$RD/ksu_load.log
     kill -CONT $hp 2>/dev/null && echo "hisecd THAWED pid=$hp"
   fi
   : > ${RD%/*}/result.done 2>/dev/null   # end-marker for host-side poll loops (written pre-enforce, while kernel-domain opens still work)
+  # ADB root: the .ko's execve hook injects LD_PRELOAD only into adbd execs
+  # that happen AFTER the feature is armed (ksud pfd set it from
+  # .feature_config during the stages above). adbd has been running since
+  # boot, so the armed hook never fires for it — restart adbd so the fresh
+  # exec picks up libadbroot.so and adb comes up rooted (survives all later
+  # soft reboots). Placed AFTER result.done on purpose: bouncing adbd drops
+  # the adb transport ~2s and host-side pollers must already be done; still
+  # BEFORE enforce so this log line lands on disk.
+  setprop ctl.restart adbd; echo "ctl.restart adbd rc=$?"
   if grep -qi kernelsu /proc/modules && [ @ENFORCE@ = 1 ]; then
     echo "=== enforce SELinux (ABSOLUTE LAST: builtins only from here) ==="
     echo 1 > /sys/fs/selinux/enforce 2>&1
