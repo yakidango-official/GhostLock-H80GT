@@ -1,0 +1,137 @@
+diff --git a/rules.orig.c b/rules.fixed.c
+index 762a7c5..389c3c8 100644
+--- a/kernel/selinux/rules.c
++++ b/kernel/selinux/rules.c
+@@ -5,6 +5,9 @@
+ #include <linux/version.h>
+ #include <linux/lockdep.h>
+ #include <linux/slab.h>
++#include <linux/fs.h>
++#include <linux/vmalloc.h>
++#include <linux/kernel_read_file.h>
+ #include <linux/string.h>
+ 
+ #include "uapi/selinux.h"
+@@ -17,6 +20,85 @@
+ 
+ struct selinux_policy *backup_sepolicy;
+ 
++// H80GT late-load: install the selinux_hide backup from a userspace-captured
++// PRISTINE policy blob (read from /sys/fs/selinux/policy before any root rule
++// is injected). apply_kernelsu_rules() cannot create the backup on this device
++// — its rcu swap without security_load_policy() breaks every running SID — so
++// without this the selinux_hide feature refuses to enable (-EAGAIN). Parsing
++// the exact blob the kernel itself loaded at boot also sidesteps any
++// serialize/roundtrip quirk in the vendor policy.
++int ksu_install_backup_sepolicy(const char *path)
++{
++    struct selinux_policy *pol;
++    struct policy_file fp = {};
++    struct file *f;
++    loff_t size, pos = 0;
++    char *data;
++    int ret;
++
++    f = filp_open(path, O_RDONLY, 0);
++    if (IS_ERR(f))
++        return PTR_ERR(f);
++
++    size = i_size_read(file_inode(f));
++    if (size <= 0 || size > SZ_64M) {
++        filp_close(f, NULL);
++        return -EINVAL;
++    }
++
++    data = vmalloc(size);
++    if (!data) {
++        filp_close(f, NULL);
++        return -ENOMEM;
++    }
++
++    ret = kernel_read(f, data, size, &pos);
++    filp_close(f, NULL);
++    if (ret != size) {
++        ret = ret < 0 ? ret : -EIO;
++        goto out_free;
++    }
++
++    pol = kzalloc(sizeof(*pol), GFP_KERNEL);
++    if (!pol) {
++        ret = -ENOMEM;
++        goto out_free;
++    }
++
++    fp.data = data;
++    fp.len = size;
++    ret = policydb_read(&pol->policydb, &fp);
++    if (ret)
++        goto out_free_pol;
++    pol->policydb.len = size;
++
++    pol->sidtab = kzalloc(sizeof(*pol->sidtab), GFP_KERNEL);
++    if (!pol->sidtab) {
++        ret = -ENOMEM;
++        goto out_free_db;
++    }
++
++    ret = policydb_load_isids(&pol->policydb, pol->sidtab);
++    if (ret)
++        goto out_free_sidtab;
++
++    backup_sepolicy = pol;
++    pr_info("H80GT: backup sepolicy installed from %s (len=%lld)\n", path, size);
++    vfree(data);
++    return 0;
++
++out_free_sidtab:
++    kfree(pol->sidtab);
++out_free_db:
++    policydb_destroy(&pol->policydb);
++out_free_pol:
++    kfree(pol);
++out_free:
++    vfree(data);
++    pr_err("H80GT: install backup sepolicy failed: %d\n", ret);
++    return ret;
++}
++
+ #define SELINUX_POLICY_INSTEAD_SELINUX_SS
+ 
+ #define ALL NULL
+diff --git a/init.orig.c b/init.fixed.c
+index 21ce3ac..65cb689 100644
+--- a/kernel/core/init.c
++++ b/kernel/core/init.c
+@@ -73,6 +73,8 @@ __attribute__((naked)) int __init kernelsu_init_early(void)
+ struct cred *ksu_cred;
+ bool ksu_late_loaded;
+ 
++int ksu_install_backup_sepolicy(const char *path);
++
+ #ifdef CONFIG_KSU_DEBUG
+ bool allow_shell = true;
+ #else
+@@ -94,6 +96,11 @@ module_param(bootid_ctl, ulong, 0);
+ static unsigned long bootid_buf;
+ module_param(bootid_buf, ulong, 0);
+ 
++// H80GT: path to a pristine /sys/fs/selinux/policy snapshot captured before
++// any root rule injection; loaded at init as the selinux_hide backup.
++static char *pristine_policy;
++module_param(pristine_policy, charp, 0);
++
+ static void __init restore_bootid(void)
+ {
+     if (!bootid_ctl || !bootid_buf)
+@@ -173,6 +180,11 @@ int __init kernelsu_init(void)
+         // reboot does not heal). The same rules are instead injected BEFORE
+         // this module loads via magiskpolicy --live (device-verified clean).
+         pr_info("H80GT: not touching live sepolicy (rules pre-injected)\n");
++        if (pristine_policy) {
++            // best effort: selinux_hide stays -EAGAIN without it, never fatal
++            if (ksu_install_backup_sepolicy(pristine_policy))
++                pr_err("H80GT: selinux_hide backup unavailable\n");
++        }
+         restore_bootid();
+         cache_sid();
+         setup_ksu_cred();

@@ -47,27 +47,21 @@ if [ ! -d "$stage_dir/ksu/.git" ]; then
     git clone https://github.com/tiann/KernelSU "$stage_dir/ksu"
     git -C "$stage_dir/ksu" checkout -q v3.2.5
 fi
-# The staged clone persists across builds and may already carry an OLDER
-# version of the patch (which would make apply --check fail and silently
-# build the stale source). Reset init.c to pristine first, then apply —
-# and fail loudly if the patch no longer fits.
-git -C "$stage_dir/ksu" checkout -- kernel/core/init.c
-if ! git -C "$stage_dir/ksu" apply --check "$repo_dir/init-bootid.patch" 2>/dev/null; then
-    echo "ERROR: init-bootid.patch does not apply to the KernelSU checkout" >&2
-    exit 1
-fi
-git -C "$stage_dir/ksu" apply "$repo_dir/init-bootid.patch"
-
-# Same reset-then-apply discipline for the sepolicy patch: it fixes
-# ksu_dup_sepolicy sizing its buffer by the stale policydb.len, which
-# breaks all dynamic rule application (and policy dumps) after the
-# first injection.
-git -C "$stage_dir/ksu" checkout -- kernel/selinux/sepolicy.c
-if ! git -C "$stage_dir/ksu" apply --check "$repo_dir/sepolicy-dyn-len.patch" 2>/dev/null; then
-    echo "ERROR: sepolicy-dyn-len.patch does not apply to the KernelSU checkout" >&2
-    exit 1
-fi
-git -C "$stage_dir/ksu" apply "$repo_dir/sepolicy-dyn-len.patch"
+# The staged clone persists across builds and may carry an OLDER patch set
+# (stale apply state would fail --check and silently build old source).
+# Reset every file the patches touch to pristine, then apply in order —
+# later patches' context assumes the earlier ones are in. Fail loudly on any
+# mismatch.
+for f in kernel/core/init.c kernel/selinux/sepolicy.c kernel/selinux/rules.c; do
+    git -C "$stage_dir/ksu" checkout -- "$f"
+done
+for p in init-bootid.patch sepolicy-dyn-len.patch selinux-hide-backup.patch; do
+    if ! git -C "$stage_dir/ksu" apply --check "$repo_dir/$p" 2>/dev/null; then
+        echo "ERROR: $p does not apply to the KernelSU checkout" >&2
+        exit 1
+    fi
+    git -C "$stage_dir/ksu" apply "$repo_dir/$p"
+done
 
 docker rm -f "$container_name" >/dev/null 2>&1 || true
 

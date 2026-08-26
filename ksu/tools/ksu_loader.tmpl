@@ -54,6 +54,11 @@ OUT=$RD/ksu_load.log
     echo KSU_LOAD_DONE; exit 1
   fi
   echo "=== policy injection (single shot, before module load) ==="
+  # Snapshot the PRISTINE policy before any rule goes in: the .ko installs it
+  # as the selinux_hide backup (it can't create one itself — see
+  # selinux-hide-backup.patch). Must precede the magiskpolicy injection below.
+  cat /sys/fs/selinux/policy > $RD/pristine_policy 2>/dev/null \
+    && echo "pristine policy snapshot: $(wc -c < $RD/pristine_policy) bytes"
   $RD/magiskpolicy --apply $RD/ksu_rules --live 2>&1
   echo "magiskpolicy exit=$?"
   ctx=$(/system/bin/sh -c 'cat /proc/self/attr/current' 2>/dev/null)
@@ -75,6 +80,7 @@ OUT=$RD/ksu_load.log
   sleep 1
   if [ @ALLOW_SHELL@ = 1 ]; then KSU_PARAMS="allow_shell=1 "; else KSU_PARAMS=""; fi
   KSU_PARAMS="${KSU_PARAMS}bootid_ctl=$BOOTID_CTL_RT bootid_buf=$BOOTID_BUF_RT"
+  [ -s $RD/pristine_policy ] && KSU_PARAMS="$KSU_PARAMS pristine_policy=$RD/pristine_policy"
   echo "ksu params: $KSU_PARAMS"
   $RD/load_ko $RD/kernelsu.ko "$KSU_PARAMS" > $RD/loadko_result.log 2>&1
   echo "load_ko_exit=$?"
