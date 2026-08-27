@@ -29,14 +29,17 @@ MagicOS 9.0 tree for 8.0.0.160 (kernel 5.10.209):
 KERNEL_SRC=/path/to/Code_Opensource/kernel bash ksu_ko_build.sh
 ```
 
-`kernel.config` in this directory is the 8.0.0.128 device config (from
-`/proc/config.gz`), used as the build default. The resulting .ko loads on
-every supported firmware; if you want to build against your own firmware's
-config, pass it via `KSU_DEVICE_CONFIG` (its `/proc/config.gz`, or
-`extract-ikconfig` output from its boot.img):
+`kernel.config` in this directory is the 220SP2 (5.10.236) device config
+(from its `/proc/config.gz`), used as the build default; the released
+kernelsu.ko is always built with this config, so rebuilding from the repo
+reproduces the exact same file. The supported firmwares' configs compile
+to identical struct layouts, so the resulting .ko loads on every supported
+firmware; to build against another firmware's config anyway, pass it via
+`KSU_DEVICE_CONFIG` (its `/proc/config.gz`, or `extract-ikconfig` output
+from its boot.img):
 
 ```
-KERNEL_SRC=/path/to/Code_Opensource/kernel KSU_DEVICE_CONFIG=/path/to/kernel.config bash ksu_ko_build.sh
+KERNEL_SRC=/path/to/Code_Opensource/kernel KSU_DEVICE_CONFIG=/path/to/your_config bash ksu_ko_build.sh
 ```
 
 The KernelSU v3.2.5 source (auto-cloned and patched on first run) and the

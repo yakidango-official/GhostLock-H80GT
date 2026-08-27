@@ -11,19 +11,23 @@
 
 ## 构建
 
-只需要荣耀MagicOS 8.0开源内核树（AGT-AN00开源包里的`Code_Opensource/kernel`目录）：
+需要荣耀MagicOS开源内核树（AGT-AN00开源包里的`Code_Opensource/kernel`目录，
+子版本匹配目标固件：8.0.0.128 用 MagicOS 8.0 树（5.10.168），8.0.0.160 起用
+MagicOS 9.0 树（5.10.209））：
 
 ```
 KERNEL_SRC=/path/to/Code_Opensource/kernel bash ksu_ko_build.sh
 ```
 
-本目录的 `kernel.config` 是 8.0.0.128 的设备配置（取自 `/proc/config.gz`），
-作为构建默认值。编出来的 .ko 在所有支持的固件上都能加载；想用自己固件的
-配置编译的话，用 `KSU_DEVICE_CONFIG` 传入（设备的 `/proc/config.gz`，或
-boot.img 的 `extract-ikconfig` 输出）：
+本目录的 `kernel.config` 是 220SP2（5.10.236）的设备配置（取自其
+`/proc/config.gz`），作为构建默认值；发布的 kernelsu.ko 固定使用这份
+配置编译，以保证任何人从仓库重新构建都能得到完全相同的文件。各支持
+固件的配置编译出的内核结构布局相同，所以编出来的 .ko 在所有支持的
+固件上都能加载；仍想用其他固件的配置编译的话，用 `KSU_DEVICE_CONFIG`
+传入（设备的 `/proc/config.gz`，或 boot.img 的 `extract-ikconfig` 输出）：
 
 ```
-KERNEL_SRC=/path/to/Code_Opensource/kernel KSU_DEVICE_CONFIG=/path/to/kernel.config bash ksu_ko_build.sh
+KERNEL_SRC=/path/to/Code_Opensource/kernel KSU_DEVICE_CONFIG=/path/to/your_config bash ksu_ko_build.sh
 ```
 
 设备config、KernelSU v3.2.5源码（首次运行自动克隆并打好补丁）、设备符号名列表都由脚本自动准备到`ksu/.build/`。产物为`ksu/.build/kernelsu.ko`，复制到`tools/kernelsu.ko`即可使用。

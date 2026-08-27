@@ -131,15 +131,15 @@ OUT=$RD/ksu_load.log
     kill -CONT $hp 2>/dev/null && echo "hisecd THAWED pid=$hp"
   fi
   : > ${RD%/*}/result.done 2>/dev/null   # end-marker for host-side poll loops (written pre-enforce, while kernel-domain opens still work)
-  # NOTE: no adbd handling here, on purpose. Upstream KSU's late-load path
-  # doesn't bounce adbd either — the adb_root hook only sees adbd execs that
-  # happen after the feature is armed, so a pre-existing adbd stays unrooted
-  # until something restarts it. adbd pickup lives in the hotreboot module,
-  # which runs post-soft-reboot from the manager's ksu domain (the adbd kill
-  # works there under enforcing; this kernel-domain shell loses the exec for
-  # pidof and the sigkill perm on adbd the moment enforcing flips — the
-  # loader's own enforce write above is fine because it happens before the
-  # flip) and bounces adbd only when it is not yet ksu-hooked.
+  # ADB Root note: the adb_root execve hook only takes effect for adbd
+  # launches that happen after the feature is turned on, so an adbd started
+  # earlier stays unrooted until it is restarted. The loader deliberately
+  # does not restart it: before re-enforcing, killing adbd also kills this
+  # script (the on-device shell tools run inside adbd's process group); after
+  # re-enforcing, this shell no longer has the permission to kill adbd. The
+  # hotreboot module handles it instead — it runs at each soft reboot from
+  # the manager's ksu domain (where the kill does work under enforcing) and
+  # restarts adbd only when it is not yet running with the hook.
   if grep -qi kernelsu /proc/modules && [ @ENFORCE@ = 1 ]; then
     echo "=== enforce SELinux (ABSOLUTE LAST: builtins only from here) ==="
     echo 1 > /sys/fs/selinux/enforce 2>&1
