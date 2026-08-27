@@ -135,9 +135,11 @@ OUT=$RD/ksu_load.log
   # doesn't bounce adbd either — the adb_root hook only sees adbd execs that
   # happen after the feature is armed, so a pre-existing adbd stays unrooted
   # until something restarts it. adbd pickup lives in the hotreboot module,
-  # which runs post-soft-reboot from the manager's ksu domain (where the
-  # enforce write and the adbd kill both work under enforcing) and bounces
-  # adbd only when it is not yet ksu-hooked.
+  # which runs post-soft-reboot from the manager's ksu domain (the adbd kill
+  # works there under enforcing; this kernel-domain shell loses the exec for
+  # pidof and the sigkill perm on adbd the moment enforcing flips — the
+  # loader's own enforce write above is fine because it happens before the
+  # flip) and bounces adbd only when it is not yet ksu-hooked.
   if grep -qi kernelsu /proc/modules && [ @ENFORCE@ = 1 ]; then
     echo "=== enforce SELinux (ABSOLUTE LAST: builtins only from here) ==="
     echo 1 > /sys/fs/selinux/enforce 2>&1

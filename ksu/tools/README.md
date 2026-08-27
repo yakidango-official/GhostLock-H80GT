@@ -6,7 +6,7 @@ The on-device package carries a set of helper binaries. Provenance per file:
 |---|---|---|
 | `load_ko` | `load_ko.c` (this repo) | `cd exploit && ./docker-build.sh tools` |
 | `kmsg_dumper` | `kmsg_dumper.c` (this repo) | `cd exploit && ./docker-build.sh tools` |
-| `kernelsu_h80gt.ko` | custom KernelSU v3.2.5 build | build via `..` (see `../README.md`), copy the result here |
+| `kernelsu.ko` | custom KernelSU v3.2.5 build | build via `..` (see `../README.md`), copy the result here |
 | `ksud` | shipped in this repo | extracted from the KernelSU v3.2.5 release APK (`lib/arm64-v8a/libksud.so`) |
 | `magiskpolicy` | shipped in this repo | unmodified from a Magisk release (arm64), GPL-3.0 — source: [Magisk](https://github.com/topjohnwu/Magisk) |
 | `ksu_rules` | this repo | — (magiskpolicy policy injection) |
@@ -25,7 +25,7 @@ The on-device package carries a set of helper binaries. Provenance per file:
   injected *before* module load (the kernel's own
   `security_load_policy`/`sidtab_convert` path keeps running domains valid —
   the module's own in-kernel `apply_kernelsu_rules()` swap is skipped via
-  `../init-h80gt.patch`, it breaks running domains on this device).
+  `../init-bootid.patch`, it breaks running domains on this device).
   `../ksu_rules.annotated` is the same rule set with per-rule commentary.
 - **ksu_loader.tmpl** — the autonomous on-device loader executed by the
   exploit's root anchor: freezes hisecd (thawed at the end AND on every abort
@@ -35,5 +35,5 @@ The on-device package carries a set of helper binaries. Provenance per file:
   stages, and re-enforces SELinux last. `@PLACEHOLDER@`s are rendered by the
   launcher (`../ksu_load_ko.sh`).
   On any abort the exploit-side boot_id hijack is never restored (the .ko's
-  h80gt_bootid_* params do that on success), so an aborted run REQUIRES a
+  bootid_ctl/bootid_buf params do that on success), so an aborted run REQUIRES a
   reboot — the script says so loudly in its log.

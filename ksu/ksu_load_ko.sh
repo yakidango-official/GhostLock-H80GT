@@ -1,5 +1,5 @@
 #!/bin/bash
-# ksu/ksu_load_ko.sh — PC-side (adb) KernelSU load driver for the H80GT.
+# ksu/ksu_load_ko.sh — PC-side (adb) KernelSU load driver for the Honor 80 GT.
 #
 # Loads the custom kernelsu.ko via the GhostLock on-device loader flow (the exploit's
 # rooted anchor execs an autonomous on-device loader; no interactive round
