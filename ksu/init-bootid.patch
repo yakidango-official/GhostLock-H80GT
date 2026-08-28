@@ -38,14 +38,14 @@ index e6e1b684..8bb961e2 100644
          pr_info("late load mode, skipping kprobe hooks\n");
  
 -        apply_kernelsu_rules();
-+        // NEVER call apply_kernelsu_rules() on a late load: it dup's
-+        // the live policydb, patches the copy, rcu_assign_pointer()s it in and
-+        // destroys the old policy, but NEVER calls security_load_policy() —
-+        // so sidtab_convert() never runs and every running SID keeps a
-+        // context computed against the destroyed policydb (device-verified:
-+        // attr/current unreadable, servicemanager broken system-wide, a soft
-+        // reboot does not heal). The same rules are instead injected BEFORE
-+        // this module loads via magiskpolicy --live (device-verified clean).
++        // NEVER call apply_kernelsu_rules() on a late load: the same rules
++        // are already injected BEFORE this module loads via magiskpolicy
++        // --live (device-verified clean), so a second application here is
++        // redundant. (An earlier revision of this comment blamed the
++        // dup/swap-and-destroy itself for a device-verified servicemanager
++        // breakage; that breakage was later root-caused to the exploit's
++        // own permissive write clearing selinux_state.initialized@+2, and
++        // the swap path is exonerated.)
 +        pr_info("not touching live sepolicy (rules pre-injected)\n");
 +        restore_bootid();
          cache_sid();

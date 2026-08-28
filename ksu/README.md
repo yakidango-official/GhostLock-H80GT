@@ -55,3 +55,16 @@ bash ksu_load_ko.sh
 
 The script does everything: exploit root → policy injection → module load →
 ksud bring-up → SELinux enforcing restored last.
+
+## Known boundary: module sepolicy.rule and runtime policy changes
+
+Module `sepolicy.rule` files are applied by ksud's dynamic injection
+(`handle_sepolicy`) during the loader window — device-verified, including
+two consecutive applies in one session. Both `handle_sepolicy` and
+`apply_kernelsu_rules` use dup + RCU swap + destroy (neither calls
+`security_load_policy`); that mechanism has NOT broken this device. A 2026-08
+servicemanager breakage once attributed to it was later root-caused to the
+exploit's own permissive write clearing `selinux_state.initialized@+2` (see
+the comment in `init-bootid.patch`). Applying rules at runtime OUTSIDE the
+loader window (installing/enabling a module while enforcing) is unverified —
+run a hot reboot to pick up such modules.

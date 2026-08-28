@@ -38,20 +38,24 @@ WORK=/tmp/ksu_load_$STAMP
 SUMMARY="$WORK/SUMMARY.txt"
 MAX_TRIES="${MAX_TRIES:-3}"
 
-# RUNDIR: per-run FRESH directory for ALL device payloads. Exploit stray
+# RUNDIR: per-ATTEMPT FRESH directory for ALL device payloads. Exploit stray
 # writes can corrupt ON-DISK inode metadata (flushed by an abnormal reboot),
 # and adb push O_TRUNC KEEPS the poisoned inode — with the sticky 1777 dir,
 # shell can never rm/chmod it, so every later run silently execs a dead
 # binary. Fresh paths = guaranteed-clean inodes; stale ones are GC'd by the
-# root loader while permissive.
-RUNDIR=/data/local/tmp/ksu_run_$STAMP
-BIN_DEV=$RUNDIR/gl_exploit
-KSUD_DEV=$RUNDIR/ksud
+# root loader while permissive. The stamp therefore rotates per try (setup.sh
+# does the same); reusing one RUNDIR across tries would void the contract.
+fresh_rundir(){
+  STAMP="$(date +%Y%m%d_%H%M%S)_t$1"
+  RUNDIR=/data/local/tmp/ksu_run_$STAMP
+  BIN_DEV=$RUNDIR/gl_exploit
+  KSUD_DEV=$RUNDIR/ksud
+  KO_DEV=$RUNDIR/kernelsu.ko
+  LOADKO_DEV=$RUNDIR/load_ko
+  EXPLOG=$RUNDIR/gl_sysctl.log
+}
 KO_LOCAL="$ROOT/ksu/tools/kernelsu.ko"   # custom build: KSU v3.2.5 against MagicOS 5.10.168 + device config — struct offsets match Honor's kernel; see ksu/README.md
-KO_DEV=$RUNDIR/kernelsu.ko
 LOADKO_LOCAL="$ROOT/ksu/tools/load_ko"   # custom loader: SHN_ABS resolution via (fake) kallsyms + plain init_module(flags=0)
-LOADKO_DEV=$RUNDIR/load_ko
-EXPLOG=$RUNDIR/gl_sysctl.log
 
 # ---- flow toggles (bisect/debug; default flow = STAGES=1 ENFORCE=1 ALLOW_SHELL=0) ----
 KSU_STAGES="${KSU_STAGES:-1}"        # ksud post-fs-data/services/boot-completed/install after load
@@ -191,6 +195,11 @@ push_loader_payloads(){
   adb shell chmod 755 "$RUNDIR/ksu_loader.sh" "$LOADKO_DEV" "$RUNDIR/magiskpolicy" "$RUNDIR/kmsg_dumper" "$KSUD_DEV" 2>/dev/null
   # sanity: binaries must be statable (poisoned-inode guard — see RUNDIR)
   adb shell "test -x $LOADKO_DEV && test -x $RUNDIR/magiskpolicy && test -x $RUNDIR/ksu_loader.sh" || { log "FATAL: loader payload not executable"; return 1; }
+  # ksud is the whole userspace: without it the module loads but KernelSU has
+  # no manager/su — and /proc/modules would still report LIVE. Fail honestly.
+  if [ "$KSU_STAGES" = 1 ]; then
+    adb shell "test -x $KSUD_DEV" || { log "FATAL: ksud missing on device ($KSUD_DEV) — STAGES=1 would bring up a userspace-less KernelSU (extract_ksud failed? set APK= or restore ksu/tools/ksud)"; return 1; }
+  fi
   log "loader payloads staged in $RUNDIR"
 }
 
@@ -198,12 +207,14 @@ push_loader_payloads(){
 # appear (or the script's DONE/ABORT markers in its log).
 await_load(){
   log "awaiting on-device load (<=240s)"
+  AWAIT_ABORTED=0
   local t0; t0=$(date +%s)
   for i in $(seq 1 80); do
     if adb shell "grep -qi kernelsu /proc/modules 2>/dev/null"; then
       log "*** kernelsu module LIVE in $(( $(date +%s)-t0 ))s ***"; break
     fi
     if adb shell "grep -qa 'ABORT\|never flipped\|bind-mount FAIL' $RUNDIR/ksu_load.log 2>/dev/null" 2>/dev/null; then
+      AWAIT_ABORTED=1
       log "loader script ABORTED — see log"; break
     fi
     sleep 3
@@ -219,7 +230,11 @@ await_load(){
   # on / poisoned inode view) — capture the cat ERROR.
   local diag; diag=$(adb shell "cat $RUNDIR/ksu_load.log 2>&1 | head -c 200" 2>/dev/null | tr -d '\r')
   [ -z "$diag" ] || log "first-pull diagnostic: ${diag:0:120}"
-  for i in $(seq 1 72); do
+  local rounds=72
+  # Aborted load: snapshot the logs once, then the caller runs the mandatory
+  # reboot — no 6-min watch with ctl.data dangling.
+  [ "$AWAIT_ABORTED" = 1 ] && rounds=1
+  for i in $(seq 1 $rounds); do
     # Non-empty-guarded pulls: a post-death adb cat returns EMPTY and a
     # truncating > would clobber the last good capture.
     adb shell "cat $RUNDIR/ksu_load.log 2>/dev/null" > "$WORK/.pull_tmp" 2>/dev/null
@@ -315,12 +330,22 @@ extract_ksud || true
 
 for t in $(seq 1 "$MAX_TRIES"); do
   log "=== try $t/$MAX_TRIES ==="
+  fresh_rundir "$t"
   if establish; then
     log "sig_flipped=$(sig_flipped && echo YES || echo NO)"
     # The anchor drives injection+load+enforce on-device; the slide is
     # consumed ON-DEVICE (exploit -> $RUNDIR/ksu_runtime.env).
     await_load
     report
+    if [ "${AWAIT_ABORTED:-0}" = 1 ]; then
+      # The exploit's contract: if the loader aborts before the .ko's boot_id
+      # restore, ctl.data dangles to freed kernel memory and a reboot is
+      # MANDATORY. The reboot cascade exists for exactly this — use it, and
+      # say so with a nonzero exit instead of a fake success.
+      log "loader ABORT: ctl.data may dangle (boot_id hijacked) — reboot MANDATORY; cascading reboot"
+      reboot_device || log "reboot cascade FAILED — MANUAL REBOOT REQUIRED"
+      exit 1
+    fi
     exit 0
   fi
   log "miss"

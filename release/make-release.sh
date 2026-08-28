@@ -49,7 +49,11 @@ chmod 755 "$OUT_ROOT/setup.sh"
 # Pairing guard: every module param the loader passes must exist in the .ko.
 # A stale module (params renamed on one side only) loads fine and the boot_id
 # restore silently no-ops — the only symptom is on the device. Fail here.
-for p in $(grep '^ *KSU_PARAMS=' ksu/tools/ksu_loader.tmpl | grep -oE '[a-z_0-9]+\$' | tr -d '$' | sort -u); do
+# Extraction: param names appear as name=VALUE inside KSU_PARAMS assignments
+# anywhere on the line (no ^ anchor: one line starts with `if ...; then`).
+PARAMS=$(grep 'KSU_PARAMS=' ksu/tools/ksu_loader.tmpl | grep -oE '[a-z_0-9]+=' | tr -d '=' | sort -u)
+[ -n "$PARAMS" ] || { echo "module-param extraction yielded NOTHING (regex drifted?) — guard would be a no-op"; exit 1; }
+for p in $PARAMS; do
   grep -aq "$p" ksu/tools/kernelsu.ko \
     || { echo "loader passes module param -$p- but kernelsu.ko does not define it"; exit 1; }
 done
