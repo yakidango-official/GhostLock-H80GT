@@ -78,6 +78,10 @@ wait_booted || { echo "device not ready"; exit 1; }
 [ -f "$HERE/manifest" ] || { echo "missing $HERE/manifest (incomplete unpack?)"; exit 1; }
 
 K="$(dev uname -r | tr -d '\r')"
+# An empty K (transient adb/uname failure) makes grep -F "|" match EVERY
+# manifest line; head -1 is a verified firmware, so the exploit for the
+# WRONG kernel would run with zero confirmation. Refuse instead.
+[ -n "$K" ] || { echo "无法读取设备内核版本（adb/uname 瞬时失败？）——中止"; exit 1; }
 MATCH="$(grep -F "$K|" "$HERE/manifest" | head -1)"
 if [ -z "$MATCH" ]; then
   echo "未知设备/系统。"
