@@ -154,6 +154,18 @@ try_once() {
     i=$((i + 1))
   done
   echo "== timed out waiting for the module; device log: $RD/gl.log"
+  # Do NOT start a concurrent attempt: attempt N's chain (exploit/loader)
+  # may still be alive on the device. Two chains racing the same global
+  # ctl.data hijack means kernel-memory corruption, and attempt N's loader
+  # rundir GC would delete N+1's LIVE rundir. Killing the chain is not an
+  # option either (a SIGKILLed parked walk waiter panics the kernel in
+  # poll_freewait), so the only safe move is to abort and ask for a reboot.
+  # ([i] trick: keep pgrep -f from matching our own sh -c wrapper.)
+  if dev "pgrep -f '$RD/explo[i]t' >/dev/null 2>&1 || pgrep -f 'ksu_loade[r].sh' >/dev/null 2>&1"; then
+    echo "== 上一次尝试的链仍在运行（exploit/loader 存活）。"
+    echo "== 并发重试会破坏内核状态，已中止。请重启手机清除旧链后重跑。"
+    exit 1
+  fi
   return 2
 }
 
