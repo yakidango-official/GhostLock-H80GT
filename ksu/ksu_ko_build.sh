@@ -8,7 +8,10 @@
 # Everything except KERNEL_SRC is auto-staged into ksu/.build/:
 #   .config                  <- repo's kernel.config (device config.gz)
 #   ksu/                     <- auto-cloned KernelSU v3.3.0 (with .git, patch applied)
-#   kallsyms_names           <- repo's device symbol-name list (validation)
+#   kallsyms_names           <- symbol names extracted from the 9.0.0.230
+#                               boot image (validation; commit_creds and
+#                               prepare_kernel_cred omitted: the runtime
+#                               /proc/kallsyms read path strips them)
 #
 # Output: ksu/.build/kernelsu.ko
 set -eu
