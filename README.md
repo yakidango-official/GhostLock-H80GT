@@ -84,8 +84,8 @@ Build from source instead:
 # 1. Build the device exploit binary
 cd exploit && ./docker-build.sh bin             # exploit_static (8.0.0.128)
 #    8.0.0.160: ./docker-build.sh PROJECT=annap-AGT-AN00_8.0.0.160 bin
-#    (./docker-build.sh device builds the static binary with the default
-#     env config baked in; first run pulls the NDK, ~1.2GB)
+#    (the static binary bakes in the default env config; any knob can still
+#     be overridden by environment variables at launch; first run pulls the NDK, ~1.2GB)
 
 # 2. The KSU-side binaries live in ksu/tools/ (see ksu/tools/README.md):
 #    kernelsu.ko — build per ksu/README.md;
