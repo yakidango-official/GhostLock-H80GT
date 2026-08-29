@@ -1,5 +1,42 @@
+diff --git a/kernel/core/init.c b/kernel/core/init.c
+index b6f60e0f..0a9a5eef 100644
+--- a/kernel/core/init.c
++++ b/kernel/core/init.c
+@@ -73,6 +73,8 @@ __attribute__((naked)) int __init kernelsu_init_early(void)
+ struct cred *ksu_cred;
+ bool ksu_late_loaded;
+ 
++int ksu_install_backup_sepolicy(const char *path);
++
+ #ifdef CONFIG_KSU_DEBUG
+ bool allow_shell = true;
+ #else
+@@ -94,6 +96,11 @@ module_param(bootid_ctl, ulong, 0);
+ static unsigned long bootid_buf;
+ module_param(bootid_buf, ulong, 0);
+ 
++// path to a pristine /sys/fs/selinux/policy snapshot captured before
++// any root rule injection; loaded at init as the selinux_hide backup.
++static char *pristine_policy;
++module_param(pristine_policy, charp, 0);
++
+ static void __init restore_bootid(void)
+ {
+     if (!bootid_ctl || !bootid_buf)
+@@ -174,6 +181,11 @@ int __init kernelsu_init(void)
+         // own permissive write clearing selinux_state.initialized@+2, and
+         // the swap path is exonerated.)
+         pr_info("not touching live sepolicy (rules pre-injected)\n");
++        if (pristine_policy) {
++            // best effort: selinux_hide stays -EAGAIN without it, never fatal
++            if (ksu_install_backup_sepolicy(pristine_policy))
++                pr_err("selinux_hide backup unavailable\n");
++        }
+         restore_bootid();
+         cache_sid();
+         setup_ksu_cred();
 diff --git a/kernel/selinux/rules.c b/kernel/selinux/rules.c
-index 762a7c5..389c3c8 100644
+index 762a7c55..13c43088 100644
 --- a/kernel/selinux/rules.c
 +++ b/kernel/selinux/rules.c
 @@ -5,6 +5,9 @@
@@ -12,17 +49,10 @@ index 762a7c5..389c3c8 100644
  #include <linux/string.h>
  
  #include "uapi/selinux.h"
-@@ -17,6 +20,85 @@
+@@ -17,6 +20,78 @@
  
  struct selinux_policy *backup_sepolicy;
  
-+// Late-load: install the selinux_hide backup from a userspace-captured
-+// PRISTINE policy blob (read from /sys/fs/selinux/policy before any root rule
-+// is injected). apply_kernelsu_rules() cannot create the backup on this device
-+// — its rcu swap without security_load_policy() breaks every running SID — so
-+// without this the selinux_hide feature refuses to enable (-EAGAIN). Parsing
-+// the exact blob the kernel itself loaded at boot also sidesteps any
-+// serialize/roundtrip quirk in the vendor policy.
 +int ksu_install_backup_sepolicy(const char *path)
 +{
 +    struct selinux_policy *pol;
@@ -98,40 +128,3 @@ index 762a7c5..389c3c8 100644
  #define SELINUX_POLICY_INSTEAD_SELINUX_SS
  
  #define ALL NULL
-diff --git a/kernel/core/init.c b/kernel/core/init.c
-index 21ce3ac..65cb689 100644
---- a/kernel/core/init.c
-+++ b/kernel/core/init.c
-@@ -73,6 +73,8 @@ __attribute__((naked)) int __init kernelsu_init_early(void)
- struct cred *ksu_cred;
- bool ksu_late_loaded;
- 
-+int ksu_install_backup_sepolicy(const char *path);
-+
- #ifdef CONFIG_KSU_DEBUG
- bool allow_shell = true;
- #else
-@@ -94,6 +96,11 @@ module_param(bootid_ctl, ulong, 0);
- static unsigned long bootid_buf;
- module_param(bootid_buf, ulong, 0);
- 
-+// path to a pristine /sys/fs/selinux/policy snapshot captured before
-+// any root rule injection; loaded at init as the selinux_hide backup.
-+static char *pristine_policy;
-+module_param(pristine_policy, charp, 0);
-+
- static void __init restore_bootid(void)
- {
-     if (!bootid_ctl || !bootid_buf)
-@@ -173,6 +180,11 @@ int __init kernelsu_init(void)
-         // reboot does not heal). The same rules are instead injected BEFORE
-         // this module loads via magiskpolicy --live (device-verified clean).
-         pr_info("not touching live sepolicy (rules pre-injected)\n");
-+        if (pristine_policy) {
-+            // best effort: selinux_hide stays -EAGAIN without it, never fatal
-+            if (ksu_install_backup_sepolicy(pristine_policy))
-+                pr_err("selinux_hide backup unavailable\n");
-+        }
-         restore_bootid();
-         cache_sid();
-         setup_ksu_cred();

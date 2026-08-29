@@ -2,9 +2,8 @@
 //
 // Replicates KernelSU's ksuinit::load_module: the .ko has SHN_UNDEF symbols
 // the kernel's module loader can't resolve because Honor (a) strips
-// commit_creds/__cfi_slowpath/etc from /proc/kallsyms AND (b) doesn't EXPORT
-// the SELinux internals (avc_has_perm, avtab_*, sidtab_*, security_*) the .ko
-// hooks. Resolve every SHN_UNDEF symbol against /proc/kallsyms (which lists
+// commit_creds from /proc/kallsyms AND (b) doesn't EXPORT the SELinux
+// internals (avc_has_perm, avtab_*, sidtab_*, security_*) the .ko hooks. Resolve every SHN_UNDEF symbol against /proc/kallsyms (which lists
 // ALL kernel symbols, not just exported ones) and rewrite each entry to
 // SHN_ABS with the runtime address; the loader then treats them as absolute
 // (no __ksymtab lookup) and applies relocations directly.

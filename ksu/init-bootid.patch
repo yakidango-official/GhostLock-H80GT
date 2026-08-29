@@ -11,7 +11,7 @@ index e6e1b684..8bb961e2 100644
 +// chain /proc/sys/kernel/random/boot_id reads VOLATILE kernel memory.
 +// libcutils builds /dev/ashmem<boot_id> at every app start -> ENOENT ->
 +// fallback /dev/ashmem is denied for app domains -> every app crashes, and a
-+// userspace mknod chase cannot work (the value keeps changing). Kernel-space
++// userspace mknod workaround cannot work (the value keeps changing). Kernel-space
 +// fix: point ctl_table.data back at the true sysctl_bootid buffer (ueventd
 +// already created /dev/ashmem<true-uuid> at boot). Both are statics stripped
 +// from kallsyms, so the loader passes link+slide as module params.

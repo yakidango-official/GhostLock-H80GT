@@ -1,16 +1,17 @@
 #!/bin/bash
 # ksu/ksu_load_ko.sh — PC-side (adb) KernelSU load driver for the Honor 80 GT.
 #
-# Loads the custom kernelsu.ko via the GhostLock on-device loader flow (the exploit's
-# rooted anchor execs an autonomous on-device loader; no interactive round
-# trips), defeating BOTH Honor walls that block the standard `ksud late-load`:
+# Loads the custom kernelsu.ko via the GhostLock on-device loader flow (the
+# exploit's root process runs a self-contained on-device loader; no
+# interactive round trips), working around the two Honor restrictions that
+# block the standard `ksud late-load`:
 #
-#   WALL 1 — CONFIG_MODULE_SIG_FORCE=y: the exploit flips the runtime
+#   1. CONFIG_MODULE_SIG_FORCE=y: the exploit flips the runtime
 #     `sig_enforce` bool to 0 (the compile-time flag only sets the DEFAULT;
 #     the check is a variable read), so unsigned .ko passes module_sig_check.
 #
-#   WALL 2 — kallsyms name-stripping: Honor removed commit_creds from
-#     /proc/kallsyms, so a naive init_module can't resolve the .ko's
+#   2. kallsyms name-stripping: Honor removed commit_creds from
+#     /proc/kallsyms, so a plain init_module can't resolve the .ko's
 #     SHN_UNDEF symbols. The on-device loader bind-mounts a fake kallsyms =
 #     real kallsyms + a PREPENDED line pointing commit_creds at its true
 #     runtime address (slide-derived, emitted by the exploit).
@@ -20,7 +21,7 @@
 # Usage:  bash ksu_load_ko.sh
 #   MAX_TRIES=3       establish attempts (reboot between)
 #   APK=...           KernelSU apk (only if tools/ksud is absent)
-#   BIN=...           exploit binary (default: the 'make test' static build)
+#   BIN=...           exploit binary (default: exploit/build/<project>/bin/exploit_static)
 
 set -u
 
@@ -38,13 +39,14 @@ WORK=/tmp/ksu_load_$STAMP
 SUMMARY="$WORK/SUMMARY.txt"
 MAX_TRIES="${MAX_TRIES:-3}"
 
-# RUNDIR: per-ATTEMPT FRESH directory for ALL device payloads. Exploit stray
-# writes can corrupt ON-DISK inode metadata (flushed by an abnormal reboot),
-# and adb push O_TRUNC KEEPS the poisoned inode — with the sticky 1777 dir,
-# shell can never rm/chmod it, so every later run silently execs a dead
-# binary. Fresh paths = guaranteed-clean inodes; stale ones are GC'd by the
-# root loader while permissive. The stamp therefore rotates per try (setup.sh
-# does the same); reusing one RUNDIR across tries would void the contract.
+# RUNDIR: a FRESH directory per attempt for all device payloads. The exploit's
+# stray writes can corrupt on-disk inode metadata (flushed by an abnormal
+# reboot), and adb push O_TRUNC keeps the poisoned inode — with the sticky
+# 1777 dir the shell can never remove or chmod it, so every later run would
+# silently exec a dead binary. Fresh paths guarantee clean inodes; stale
+# directories are cleaned up by the root loader while permissive. The stamp
+# therefore rotates per try (setup.sh does the same); reusing one RUNDIR
+# across tries would void that guarantee.
 fresh_rundir(){
   STAMP="$(date +%Y%m%d_%H%M%S)_t$1"
   RUNDIR=/data/local/tmp/ksu_run_$STAMP

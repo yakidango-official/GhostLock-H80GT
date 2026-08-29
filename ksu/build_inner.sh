@@ -1,7 +1,7 @@
 #!/bin/sh
 # Runs INSIDE the debian:bookworm (native arm64) container.
-# Builds KernelSU v3.2.5 as an external module against the MagicOS 5.10.168
-# kernel source + the device's exact /proc/config.gz, so every struct offset
+# Builds KernelSU as an external module against the MagicOS kernel
+# source + the device's exact /proc/config.gz, so every struct offset
 # matches the shipping Honor kernel (task_struct.cred, inode.i_fsnotify_marks,
 # fsnotify, selinux, ...).
 set -eux

@@ -3,17 +3,17 @@ English | [中文](README.zh-CN.md)
 # Custom KernelSU.ko for Honor 80 GT
 
 The stock GKI `android12-5.10_kernelsu.ko` is built against GKI headers whose
-struct layouts don't match Honor's, so it can't load properly. It must be
+struct layouts don't match Honor's, so it cannot load. It must be
 rebuilt from Honor's own kernel source (the MagicOS opensource package) with
 the device's exact `/proc/config.gz` so that every offset is correct at
-compile time. Three patches are applied to KernelSU v3.2.5's
-`kernel/core/init.c`:
+compile time. Three patches are applied to the KernelSU v3.3.0 source:
 
-1. **SELinux policy injection.** The rules are instead injected with
-   magiskpolicy --live before the module loads (`tools/ksu_rules`).
+1. **SELinux policy injection.** Rules are injected with magiskpolicy
+   --live before the module loads, instead of by the module itself
+   (`tools/ksu_rules`).
 2. **No automatic re-enforce.** The loader script restores SELinux enforcing
-   manually as its last step — doing it earlier would leave the kernel-domain
-   anchor unable to write files or exec programs.
+   manually as its last step — doing it earlier would leave the exploit's root
+   process unable to write files or exec programs.
 3. **boot_id pointer fix.** The exploit hijacks boot_id's memory pointer and
    never restores it, which would crash apps on startup; the module points it
    back at the real buffer on load.
@@ -42,10 +42,10 @@ from its boot.img):
 KERNEL_SRC=/path/to/Code_Opensource/kernel KSU_DEVICE_CONFIG=/path/to/your_config bash ksu_ko_build.sh
 ```
 
-The KernelSU v3.2.5 source (auto-cloned and patched on first run) and the
+The KernelSU v3.3.0 source (auto-cloned and patched on first run) and the
 device symbol-name list are staged automatically into `ksu/.build/`. The
 output is `ksu/.build/kernelsu.ko` — copy it to
-`tools/kernelsu.ko` for use.
+`tools/kernelsu.ko` for use. The .ko is a build artifact and is not tracked in git — build or drop it in before assembling a release.
 
 ## Load
 
@@ -62,9 +62,9 @@ Module `sepolicy.rule` files are applied by ksud's dynamic injection
 (`handle_sepolicy`) during the loader window — device-verified, including
 two consecutive applies in one session. Both `handle_sepolicy` and
 `apply_kernelsu_rules` use dup + RCU swap + destroy (neither calls
-`security_load_policy`); that mechanism has NOT broken this device. A 2026-08
+`security_load_policy`); that mechanism has not broken this device. A 2026-08
 servicemanager breakage once attributed to it was later root-caused to the
 exploit's own permissive write clearing `selinux_state.initialized@+2` (see
-the comment in `init-bootid.patch`). Applying rules at runtime OUTSIDE the
+the comment in `init-bootid.patch`). Applying rules at runtime outside the
 loader window (installing/enabling a module while enforcing) is unverified —
 run a hot reboot to pick up such modules.

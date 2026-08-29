@@ -2,11 +2,11 @@
 
 # 荣耀80 GT 定制 KernelSU.ko
 
-官方GKI的`android12-5.10_kernelsu.ko`是按GKI头文件编的，结构体布局和荣耀的对不上，无法正常加载。需要用荣耀自己的内核源码（MagicOS开源包）以及设备原版的`/proc/config.gz`重新编译，以确保所有偏移都是正确的。在KernelSU v3.2.5的`kernel/core/init.c`上打了三处补丁：
+官方GKI的`android12-5.10_kernelsu.ko`是按GKI头文件编译的，结构体布局与荣耀设备不一致，无法正常加载。需要用荣耀自己的内核源码（MagicOS开源包）以及设备原版的`/proc/config.gz`重新编译，以确保所有偏移都是正确的。在KernelSU v3.3.0源码上打了三处补丁：
 
-1. **注入SELinux策略**。规则改成在加载模块前用magiskpolicy --live注入（`tools/ksu_rules`）。
-2. **禁用自动恢复enforcing**。加载脚本把恢复enforcing放在最后一步手动做，过早恢复会导致kernel域的anchor无法写文件、执行程序。
-3. **修复boot_id指向**。exploit劫持了boot_id的内存指针且不会复原，这会导致app启动崩溃，模块加载时把它指回真正的缓冲区。  
+1. **注入SELinux策略**。规则改为在加载模块前用magiskpolicy --live注入，而非由模块自己注入（`tools/ksu_rules`）。
+2. **禁用自动恢复enforcing**。加载脚本把恢复enforcing放在最后一步手动做，过早恢复会导致exploit的root进程无法写文件、执行程序。
+3. **修复boot_id指向**。exploit劫持了boot_id的内存指针且不会复原，这会导致app启动崩溃，模块加载时把它指回真正的缓冲区。
 
 
 ## 构建
@@ -35,7 +35,11 @@ KERNEL_SRC=/path/to/Code_Opensource/kernel KSU_DEVICE_CONFIG=/path/to/your_confi
 ## 加载
 
 ```
-APK=/path/to/KernelSU_v3.2.5_32525-release.apk bash ksu_load_ko.sh
+bash ksu_load_ko.sh
 ```
 
 脚本会自动完成：exploit提权→注入策略→加载.ko→ksud初始化→最后恢复enforcing。
+
+## 已知边界：模块的 sepolicy.rule 与运行时策略变更
+
+模块的`sepolicy.rule`由ksud的动态注入（`handle_sepolicy`）在加载窗口内应用——已真机验证，包括同一次会话内连续两轮应用。`handle_sepolicy`与`apply_kernelsu_rules`都采用"复制＋RCU替换＋销毁"的流程（均不调用`security_load_policy`）；该机制未在本设备上出过问题。2026-08的一次servicemanager故障曾归因于此，后查明真因是exploit自身的宽容化写清除了`selinux_state.initialized@+2`（见`init-bootid.patch`内注释）。在加载窗口之外运行时应用规则（如enforcing状态下安装/启用模块）尚未验证——此类模块请通过热重启生效。

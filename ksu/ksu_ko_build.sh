@@ -7,7 +7,7 @@
 #
 # Everything except KERNEL_SRC is auto-staged into ksu/.build/:
 #   .config                  <- repo's kernel.config (device config.gz)
-#   ksu/                     <- auto-cloned KernelSU v3.2.5 (with .git, patch applied)
+#   ksu/                     <- auto-cloned KernelSU v3.3.0 (with .git, patch applied)
 #   kallsyms_names           <- repo's device symbol-name list (validation)
 #
 # Output: ksu/.build/kernelsu.ko
@@ -35,21 +35,22 @@ fi
 kernel_src="$(CDPATH= cd -- "$KERNEL_SRC" && pwd)"
 
 # KSU_DEVICE_CONFIG: the target firmware's kernel config (its /proc/config.gz,
-# or extract-ikconfig output from its boot.img). Defaults to the 220SP2
-# (5.10.236) device config shipped in this repo; the released kernelsu.ko is
-# always built with it, so a rebuild from the repo reproduces the exact same
-# file. The supported firmwares' configs compile to identical struct layouts,
-# so this default serves them all.
+# or extract-ikconfig output from its boot.img). Defaults to the 9.0.0.230
+# (5.10.236) device config shipped in this repo (identical across the 5.10.236
+# builds); the released kernelsu.ko
+# (8.0/9.0) is always built with it, so a rebuild from the repo reproduces
+# the exact same file. The 8.0/9.0 firmwares' configs compile to identical
+# struct layouts, so that .ko covers all of them.
 cp "${KSU_DEVICE_CONFIG:-$repo_dir/kernel.config}" "$stage_dir/.config"
 cp "${KSU_KALLSYMS_NAMES:-$repo_dir/kallsyms_names}" "$stage_dir/kallsyms_names.txt" 2>/dev/null || true
 cp "$repo_dir/build_inner.sh" "$repo_dir/empty_versions.py" "$stage_dir/"
 
-# KernelSU v3.2.5 checkout. .git must be present and at the tag so
+# KernelSU v3.3.0 checkout. .git must be present and at the tag so
 # KSU_VERSION = 30000 + git rev-list --count HEAD = 32525 (manager version check).
 if [ ! -d "$stage_dir/ksu/.git" ]; then
     rm -rf "$stage_dir/ksu"
     git clone https://github.com/tiann/KernelSU "$stage_dir/ksu"
-    git -C "$stage_dir/ksu" checkout -q v3.2.5
+    git -C "$stage_dir/ksu" checkout -q v3.3.0
 fi
 # The staged clone persists across builds and may carry an OLDER patch set
 # (stale apply state would fail --check and silently build old source).
