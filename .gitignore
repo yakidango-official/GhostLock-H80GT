@@ -6,5 +6,5 @@ ksu/tools/load_ko
 ksu/tools/kmsg_dumper
 
 .DS_Store
-ksu/.build/
+ksu/.build*/
 build/

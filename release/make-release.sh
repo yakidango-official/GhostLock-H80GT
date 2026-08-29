@@ -25,7 +25,7 @@ for VER in $TARGETS; do
   DIR="exploit/src/targets/$T"
   [ -f "$DIR/target.h" ] || { echo "unknown target $T"; exit 1; }
   ./exploit/docker-build.sh "PROJECT=$T" >/dev/null
-  BIN="exploit/build/$T/bin/exploit_ondevice_static"
+  BIN="exploit/build/$T/bin/exploit_static"
   [ -f "$BIN" ] || { echo "build failed for $T"; exit 1; }
   mkdir -p "$OUT_ROOT/exploits/$VER"
   cp "$BIN" "$OUT_ROOT/exploits/$VER/exploit"
