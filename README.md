@@ -18,6 +18,7 @@ up to 9.0.0.230. Adapted versions:
 | 9.0.0.220SP2 / SP4 | 5.10.236 | ✅ verified (SP4 ships the same boot image as SP2) |
 | 9.0.0.230 | 5.10.236 | ✅ verified |
 | 8.0.0.131 | 5.10.198 | ⚠️ not verified on a real device |
+| 8.0.0.135 / 143 / 150 | 5.10.198 | ⚠️ not verified on a real device |
 | 8.0.0.161 | 5.10.209 | ⚠️ not verified on a real device |
 | 9.0.0.102 / 120 / 130 / 165 | 5.10.209 | ⚠️ not verified on a real device |
 | 9.0.0.175SP1 / 187 | 5.10.226 | ⚠️ not verified on a real device |
