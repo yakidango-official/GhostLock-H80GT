@@ -49,7 +49,9 @@ cp "${KSU_KALLSYMS_NAMES:-$repo_dir/kallsyms_names}" "$stage_dir/kallsyms_names.
 cp "$repo_dir/build_inner.sh" "$repo_dir/empty_versions.py" "$stage_dir/"
 
 # KernelSU v3.3.0 checkout. .git must be present and at the tag so
-# KSU_VERSION = 30000 + git rev-list --count HEAD = 32525 (manager version check).
+# KSU_VERSION = 30000 + git rev-list --count HEAD, so .git must be present
+# and at the tag (the manager version-checks this number; never hardcode the
+# count — it is derivable at build time and goes stale in comments).
 if [ ! -d "$stage_dir/ksu/.git" ]; then
     rm -rf "$stage_dir/ksu"
     git clone https://github.com/tiann/KernelSU "$stage_dir/ksu"
