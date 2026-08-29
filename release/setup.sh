@@ -124,8 +124,8 @@ try_once() {
   dev "chmod 755 $RD/exploit $RD/load_ko $RD/magiskpolicy $RD/ksud $RD/kmsg_dumper" || return 1
 
   # Render the late-load script. hisecd is SIGSTOPped for the load window
-  # (its periodic root-procs scan reports the exploit binaries to the TEE,
-  # which orders a hard reset) and thawed on every exit path; full ksud
+  # (its periodic root-process scan reports the exploit binaries to the TEE,
+  # which orders a hard reset) and resumed on every exit path; full ksud
   # bring-up, SELinux re-enforce as the absolute last step.
   sed -e "s|@RUNDIR@|$RD|g" -e "s|@STAMP@|$STAMP|g" \
       -e "s|@FREEZE_HISECD@|1|g" -e "s|@ALLOW_SHELL@|0|g" \
@@ -144,13 +144,13 @@ try_once() {
     sleep 5
     if [ "$MODE" = pc ]; then
       [ "$($ADB get-state 2>/dev/null)" = device ] || {
-        echo "== device rebooted mid-run (known miss); waiting for it to come back"
+        echo "== the attempt missed and the device rebooted (happens sometimes); waiting for it to come back"
         wait_booted || return 1
         return 2
       }
     fi
     if dev "grep -qi kernelsu /proc/modules"; then
-      echo "== KernelSU module LIVE"
+      echo "== KernelSU module loaded"
       sleep 10   # let the loader finish restore + re-enforce
       dev "tail -5 $RD/ksu_load.log"
       return 0
@@ -161,13 +161,13 @@ try_once() {
   # Do NOT start a concurrent attempt: attempt N's chain (exploit/loader)
   # may still be alive on the device. Two chains racing the same global
   # ctl.data hijack means kernel-memory corruption, and attempt N's loader
-  # rundir GC would delete N+1's LIVE rundir. Killing the chain is not an
+  # cleanup would delete attempt N+1's run directory. Killing the chain is not an
   # option either (a SIGKILLed parked walk waiter panics the kernel in
   # poll_freewait), so the only safe move is to abort and ask for a reboot.
-  # ([i] trick: keep pgrep -f from matching our own sh -c wrapper.)
+  # ([i] so pgrep -f does not match the wrapper process of this script.)
   if dev "pgrep -f '$RD/explo[i]t' >/dev/null 2>&1 || pgrep -f 'ksu_loade[r].sh' >/dev/null 2>&1"; then
-    echo "== 上一次尝试的链仍在运行（exploit/loader 存活）。"
-    echo "== 并发重试会破坏内核状态，已中止。请重启手机清除旧链后重跑。"
+    echo "== the previous attempt is still running (exploit/loader alive)."
+    echo "== a concurrent retry would corrupt kernel state; aborted. Reboot the phone and run again."
     exit 1
   fi
   return 2
@@ -185,7 +185,7 @@ while [ $n -le $ATTEMPTS ]; do
 done
 [ $rc -eq 0 ] || { echo "gave up after $ATTEMPTS attempts; reboot the device and run again"; exit 1; }
 
-# Old rundirs were only kept for forensics, and this run's loader already
+# Old run directories were only kept for forensics, and this run's loader already
 # salvaged any crash evidence out of them at startup (prev_* files).  Keep
 # the current one (it holds this run's logs) and drop the rest.
 dev "ls -d $RD_ROOT/ksu_run_* 2>/dev/null | grep -v '^$RD\$' | xargs rm -rf 2>/dev/null; rm -f $RD_ROOT/result.done $RD_ROOT/gl_anchor.log $RD_ROOT/gl_root_proof $RD_ROOT/.ksu_patched.ko; true"

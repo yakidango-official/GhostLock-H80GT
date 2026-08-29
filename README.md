@@ -33,11 +33,11 @@ up to 9.0.0.230. Adapted versions:
 > access it grants — is your responsibility, not the authors'.
 > - The exploit modifies kernel memory through a UAF. A failed attempt
 > reboots the device; a reboot restores everything. Success is not 100%
-> per run — just run it again.
+> per run — run it again.
 > - **Root is full control of the device — use it carefully.** This project
 > only gets you root; flashing images, writing partitions, disabling
 > protections, or installing untested modules afterwards can permanently
-> brick the device, and that is on you.
+> brick the device, and that is your responsibility.
 
 ## Repository layout
 
@@ -57,17 +57,17 @@ ksu/         custom kernelsu.ko build (MagicOS kernel + device config) and the
 
 Requirements: Docker, Android Platform Tools.
 
-One prebuilt bundle covers every supported firmware: grab it from
+One prebuilt bundle covers every supported firmware: download it from
 [Releases](../../releases), unpack it on the host, and run
 
 ```sh
 ./setup.sh            # PC, with adb: identifies the kernel, picks the
-                      # matching exploit, runs the chain, retries on the
-                      # occasional miss
+                      # matching exploit, runs the chain, retries when an
+                      # attempt fails
 ```
 
-No PC around? Unpack the bundle on the phone and run the same script from
-a Shizuku shell (rish) — it detects where it is and does the rest
+Without a PC, unpack the bundle on the phone and run the same script
+from a Shizuku shell (rish) — it detects where it is and does the rest
 locally:
 
 ```sh
@@ -84,22 +84,21 @@ Build from source instead:
 # 1. Build the device exploit binary
 cd exploit && ./docker-build.sh bin             # exploit_static (8.0.0.128)
 #    8.0.0.160: ./docker-build.sh PROJECT=annap-AGT-AN00_8.0.0.160 bin
-#    (./docker-build.sh ondevice builds the static binary with the default
+#    (./docker-build.sh device builds the static binary with the default
 #     env config baked in; first run pulls the NDK, ~1.2GB)
 
-# 2. Obtain/build the KSU bundle binaries into ksu/tools/ —
-#    see ksu/tools/README.md (kernelsu.ko: ksu/README.md — build it
-#    against the opensource tree matching your firmware's kernel sublevel;
-#    ksud: shipped in the repo; magiskpolicy: shipped in the repo; load_ko/kmsg_dumper:
-#    ./docker-build.sh tools)
+# 2. The KSU-side binaries live in ksu/tools/ (see ksu/tools/README.md):
+#    kernelsu.ko — build per ksu/README.md;
+#    ksud, magiskpolicy, ksu_rules — shipped in the repo;
+#    load_ko, kmsg_dumper — ./docker-build.sh tools
 
 # 3. Enable ADB debugging on the phone, then
 bash ../ksu/ksu_load_ko.sh
 #    8.0.0.160: PROJECT=annap-AGT-AN00_8.0.0.160 bash ../ksu/ksu_load_ko.sh
 ```
 
-The script drives the whole chain over adb: GhostLock (root + permissive +
-`sig_enforce` flip), SELinux policy injection via magiskpolicy, fake kallsyms
+The script drives the whole chain over adb: GhostLock (root access, SELinux
+permissive, `sig_enforce` disabled), SELinux policy injection via magiskpolicy, fake kallsyms
 bind-mount, `load_ko` (`init_module`), then the ksud bring-up stages,
 restoring SELinux enforcing as the absolute last step. Wait for `kernelsu`
 in `/proc/modules`, then open the KernelSU manager (shows "Working &lt;LKM&gt; [Jailbreak mode]").
@@ -115,16 +114,17 @@ symbols. The flow bind-mounts a fake kallsyms with the stripped symbols
 prepended at their true runtime addresses (link addr + KASLR slide).
 - GKI struct layouts also differ from Honor's, so the stock GKI
 `android12-5.10_kernelsu.ko` cannot be used directly. `ksu/` rebuilds
-KernelSU v3.2.5 against the MagicOS kernel source matching the firmware's
+KernelSU v3.3.0 against the MagicOS kernel source matching the firmware's
 sublevel and the device's own kernel config. See `ksu/README.md`.
 
 ## Verification status
 
 Full chain (UAF → KASLR → arbitrary R/W → cred → SELinux permissive →
 sig_enforce → KernelSU live, enforcing restored, boot_id restored)
-verified on a real device for every version in the table above. A run
-can miss early and reboot the phone (roughly one in four); the setup
-script retries automatically, or just run it again.
+verified on a real device for the versions marked ✅ above; versions
+marked ⚠️ are adapted but not verified on a real device. A run
+can fail and reboot the phone; the setup script retries automatically,
+or run it again.
 
 ## Credits
 
