@@ -19,8 +19,8 @@ MagicOS 9.0 树（5.10.209））：
 KERNEL_SRC=/path/to/Code_Opensource/kernel bash ksu_ko_build.sh
 ```
 
-本目录的 `kernel.config` 是 220SP2（5.10.236）的设备配置（取自其
-`/proc/config.gz`），作为构建默认值；发布的 kernelsu.ko 固定使用这份
+本目录的 `kernel.config` 是一份 5.10.236 设备配置（5.10.236 各版本固件的
+配置逐字节一致），作为构建默认值；发布的 kernelsu.ko 固定使用这份
 配置编译，以保证任何人从仓库重新构建都能得到完全相同的文件。各支持
 固件的配置编译出的内核结构布局相同，所以编出来的 .ko 在所有支持的
 固件上都能加载；仍想用其他固件的配置编译的话，用 `KSU_DEVICE_CONFIG`

@@ -1,4 +1,4 @@
-# KernelSU v3.2.5 apply_kernelsu_rules() equivalent, for magiskpolicy --apply.
+# KernelSU apply_kernelsu_rules() equivalent, for magiskpolicy --apply.
 # Faithful translation of kernel/selinux/rules.c (init-time rule set) so a
 # late-loaded module gets the DEFAULT KSU policy state via the kernel's own
 # security_load_policy path (sidtab_convert => running processes keep working).

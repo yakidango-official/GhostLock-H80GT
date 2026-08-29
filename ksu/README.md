@@ -23,14 +23,14 @@ compile time. Three patches are applied to the KernelSU source:
 The prerequisite is an Honor MagicOS opensource kernel tree whose sublevel
 matches the target firmware (the `Code_Opensource/kernel` directory of the
 AGT-AN00 package): the MagicOS 8.0 tree for 8.0.0.128 (kernel 5.10.168), the
-MagicOS 9.0 tree for 8.0.0.160 (kernel 5.10.209):
+MagicOS 9.0 tree for 8.0.0.160 and later (kernel 5.10.209):
 
 ```
 KERNEL_SRC=/path/to/Code_Opensource/kernel bash ksu_ko_build.sh
 ```
 
-`kernel.config` in this directory is the 220SP2 (5.10.236) device config
-(from its `/proc/config.gz`), used as the build default; the released
+`kernel.config` in this directory is a 5.10.236 device config (byte-identical
+across the 5.10.236 firmwares), used as the build default; the released
 kernelsu.ko is always built with this config, so rebuilding from the repo
 reproduces the exact same file. The supported firmwares' configs compile
 to identical struct layouts, so the resulting .ko loads on every supported

@@ -18,7 +18,7 @@ apt-get install -y --no-install-recommends \
 rm -rf /kernel /ksu
 mkdir -p /kernel /ksu
 rsync -a /kernel-src/ /kernel/
-rsync -a /build/ksu/ /ksu/          # keep .git -> KSU_VERSION=30000+2525=32525
+rsync -a /build/ksu/ /ksu/          # keep .git -> KSU_VERSION derives from the tag (manager version check)
 cp /build/.config /kernel/.config   # device /proc/config.gz, verbatim
 
 cd /kernel

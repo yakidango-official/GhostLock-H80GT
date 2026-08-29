@@ -56,7 +56,7 @@ fresh_rundir(){
   LOADKO_DEV=$RUNDIR/load_ko
   EXPLOG=$RUNDIR/gl_sysctl.log
 }
-KO_LOCAL="$ROOT/ksu/tools/kernelsu.ko"   # custom build: KSU v3.2.5 against MagicOS 5.10.168 + device config — struct offsets match Honor's kernel; see ksu/README.md
+KO_LOCAL="$ROOT/ksu/tools/kernelsu.ko"   # custom build against the MagicOS kernel source + device config — struct offsets match Honor's kernel; see ksu/README.md
 LOADKO_LOCAL="$ROOT/ksu/tools/load_ko"   # custom loader: SHN_ABS resolution via (fake) kallsyms + plain init_module(flags=0)
 
 # ---- flow toggles (bisect/debug; default flow = STAGES=1 ENFORCE=1 ALLOW_SHELL=0) ----

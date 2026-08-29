@@ -20,7 +20,7 @@ up to 9.0.0.230. Adapted versions:
 | 8.0.0.131 | 5.10.198 | ⚠️ not verified on a real device |
 | 8.0.0.135 / 143 / 150 | 5.10.198 | ⚠️ not verified on a real device |
 | 8.0.0.161 | 5.10.209 | ⚠️ not verified on a real device |
-| 9.0.0.102 / 120 / 130 / 165 | 5.10.209 | ⚠️ not verified on a real device |
+| 9.0.0.102 / 103 / 120 / 130 / 165 | 5.10.209 | ⚠️ not verified on a real device (103 ships the same boot image as 102) |
 | 9.0.0.175SP1 / 187 | 5.10.226 | ⚠️ not verified on a real device |
 | 9.0.0.210 | 5.10.236 | ⚠️ not verified on a real device |
 
