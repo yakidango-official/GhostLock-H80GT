@@ -6,8 +6,8 @@ The on-device package carries a set of helper binaries. Provenance per file:
 |---|---|---|
 | `load_ko` | `load_ko.c` (this repo) | `cd exploit && ./docker-build.sh tools` |
 | `kmsg_dumper` | `kmsg_dumper.c` (this repo) | `cd exploit && ./docker-build.sh tools` |
-| `kernelsu.ko` | custom KernelSU v3.3.0 build | build via `..` (see `../README.md`), copy the result here (build artifact — not tracked in git) |
-| `ksud` | shipped in this repo | extracted from the KernelSU v3.3.0 release APK (`lib/arm64-v8a/libksud.so`) |
+| `kernelsu.ko` | custom KernelSU build | build via `..` (see `../README.md`), copy the result here (build artifact — not tracked in git) |
+| `ksud` | shipped in this repo | extracted from the KernelSU manager release APK (`lib/arm64-v8a/libksud.so`) |
 | `magiskpolicy` | shipped in this repo | unmodified from a Magisk release (arm64), GPL-3.0 — source: [Magisk](https://github.com/topjohnwu/Magisk) |
 | `ksu_rules` | this repo | — (magiskpolicy policy injection) |
 | `ksu_loader.tmpl` | this repo | — (anchor-exec'd autonomous load script) |

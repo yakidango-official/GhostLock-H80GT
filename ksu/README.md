@@ -6,7 +6,7 @@ The stock GKI `android12-5.10_kernelsu.ko` is built against GKI headers whose
 struct layouts don't match Honor's, so it cannot load. It must be
 rebuilt from Honor's own kernel source (the MagicOS opensource package) with
 the device's exact `/proc/config.gz` so that every offset is correct at
-compile time. Three patches are applied to the KernelSU v3.3.0 source:
+compile time. Three patches are applied to the KernelSU source:
 
 1. **SELinux policy injection.** Rules are injected with magiskpolicy
    --live before the module loads, instead of by the module itself
@@ -42,7 +42,7 @@ from its boot.img):
 KERNEL_SRC=/path/to/Code_Opensource/kernel KSU_DEVICE_CONFIG=/path/to/your_config bash ksu_ko_build.sh
 ```
 
-The KernelSU v3.3.0 source (auto-cloned and patched on first run) and the
+The KernelSU source (auto-cloned and patched on first run; the upstream tag is pinned in ksu_ko_build.sh) and the
 device symbol-name list are staged automatically into `ksu/.build/`. The
 output is `ksu/.build/kernelsu.ko` — copy it to
 `tools/kernelsu.ko` for use. The .ko is a build artifact and is not tracked in git — build or drop it in before assembling a release.

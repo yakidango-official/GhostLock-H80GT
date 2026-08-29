@@ -84,7 +84,7 @@ bash ../ksu/ksu_load_ko.sh
 
 - `CONFIG_MODULE_SIG_FORCE=y`运行时`sig_enforce`标志会阻止未签名模块加载，exploit过程会将其临时翻转为0（模块加载完成后由加载脚本恢复为1）。
 - kallsyms符号名被抹除。荣耀把`commit_creds`等符号从`/proc/kallsyms`里删掉了，内核加载模块时解析不到。解决办法是bind-mount一份伪造的kallsyms，把缺的符号按真实运行时地址（链接地址+KASLR slide）补在最前面。
-- 此外，GKI的结构体布局与荣耀设备不一致，官方GKI的`android12-5.10_kernelsu.ko`无法直接使用。所以`ksu/`用匹配内核系列的MagicOS内核源码和设备自己的内核配置重编了KernelSU v3.3.0，细节见`ksu/README.md`。
+- 此外，GKI的结构体布局与荣耀设备不一致，官方GKI的`android12-5.10_kernelsu.ko`无法直接使用。所以`ksu/`用匹配内核系列的MagicOS内核源码和设备自己的内核配置重编了KernelSU，细节见`ksu/README.md`。
 
 ## 验证状态
 

@@ -2,7 +2,7 @@
 
 # 荣耀80 GT 定制 KernelSU.ko
 
-官方GKI的`android12-5.10_kernelsu.ko`是按GKI头文件编译的，结构体布局与荣耀设备不一致，无法正常加载。需要用荣耀自己的内核源码（MagicOS开源包）以及设备原版的`/proc/config.gz`重新编译，以确保所有偏移都是正确的。在KernelSU v3.3.0源码上打了三处补丁：
+官方GKI的`android12-5.10_kernelsu.ko`是按GKI头文件编译的，结构体布局与荣耀设备不一致，无法正常加载。需要用荣耀自己的内核源码（MagicOS开源包）以及设备原版的`/proc/config.gz`重新编译，以确保所有偏移都是正确的。在KernelSU源码上打了三处补丁：
 
 1. **注入SELinux策略**。规则改为在加载模块前用magiskpolicy --live注入，而非由模块自己注入（`tools/ksu_rules`）。
 2. **禁用自动恢复enforcing**。加载脚本把恢复enforcing放在最后一步手动做，过早恢复会导致exploit的root进程无法写文件、执行程序。
@@ -30,7 +30,7 @@ KERNEL_SRC=/path/to/Code_Opensource/kernel bash ksu_ko_build.sh
 KERNEL_SRC=/path/to/Code_Opensource/kernel KSU_DEVICE_CONFIG=/path/to/your_config bash ksu_ko_build.sh
 ```
 
-设备config、KernelSU v3.2.5源码（首次运行自动克隆并打好补丁）、设备符号名列表都由脚本自动准备到`ksu/.build/`。产物为`ksu/.build/kernelsu.ko`，复制到`tools/kernelsu.ko`即可使用。
+设备config、KernelSU源码（首次运行自动克隆并打好补丁；上游版本由 ksu_ko_build.sh 锁定）、设备符号名列表都由脚本自动准备到`ksu/.build/`。产物为`ksu/.build/kernelsu.ko`，复制到`tools/kernelsu.ko`即可使用。
 
 ## 加载
 

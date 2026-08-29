@@ -114,7 +114,7 @@ symbols. The flow bind-mounts a fake kallsyms with the stripped symbols
 prepended at their true runtime addresses (link addr + KASLR slide).
 - GKI struct layouts also differ from Honor's, so the stock GKI
 `android12-5.10_kernelsu.ko` cannot be used directly. `ksu/` rebuilds
-KernelSU v3.3.0 against the MagicOS kernel source matching the firmware's
+KernelSU against the MagicOS kernel source matching the firmware's
 sublevel and the device's own kernel config. See `ksu/README.md`.
 
 ## Verification status
