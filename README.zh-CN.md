@@ -78,7 +78,7 @@ bash ../ksu/ksu_load_ko.sh
 #    8.0.0.160: PROJECT=annap-AGT-AN00_8.0.0.160 bash ../ksu/ksu_load_ko.sh
 ```
 
-脚本会自动完成：exploit提权并翻转`sig_enforce`→注入SELinux策略→bind-mount伪造的kallsyms→加载.ko→ksud初始化→最后恢复SELinux enforcing。`/proc/modules`里出现`kernelsu`后，打开KernelSU管理器（显示“工作中&lt;LKM&gt;[越狱模式]”）即可使用。
+脚本会自动完成：exploit提权并翻转`sig_enforce`→注入SELinux策略→bind-mount伪造的kallsyms→加载.ko→ksud初始化→最后恢复SELinux enforcing。越狱完成后，脚本会自动打开KernelSU管理器（显示“工作中&lt;LKM&gt;[越狱模式]”）。
 
 ## 为什么要自编译.ko和自己的加载器
 

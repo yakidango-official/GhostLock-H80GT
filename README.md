@@ -101,8 +101,9 @@ bash ../ksu/ksu_load_ko.sh
 The script drives the whole chain over adb: GhostLock (root access, SELinux
 permissive, `sig_enforce` disabled), SELinux policy injection via magiskpolicy, fake kallsyms
 bind-mount, `load_ko` (`init_module`), then the ksud bring-up stages,
-restoring SELinux enforcing as the absolute last step. Wait for `kernelsu`
-in `/proc/modules`, then open the KernelSU manager (shows "Working &lt;LKM&gt; [Jailbreak mode]").
+restoring SELinux enforcing as the absolute last step. When the jailbreak
+completes, the script opens the KernelSU manager for you (shows
+"Working &lt;LKM&gt; [Jailbreak mode]").
 
 ## Why a custom .ko and loader
 
