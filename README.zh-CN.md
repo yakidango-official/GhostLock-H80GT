@@ -65,6 +65,7 @@ sh /sdcard/ghostlock/setup.sh
 # 1. 编译exploit
 cd exploit && ./docker-build.sh bin             # 生成exploit_static(8.0.0.128)
 #    8.0.0.160: ./docker-build.sh PROJECT=annap-AGT-AN00_8.0.0.160 bin
+#    ALI-AN00 8.0.0.181: ./docker-build.sh PROJECT=parrot-ALI-AN00_8.0.0.181 bin
 #    (静态版已烘焙默认配置;环境变量仍可覆盖任何项;
 #     首次运行会下载NDK,约1.2GB)
 

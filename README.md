@@ -85,6 +85,7 @@ Build from source instead:
 # 1. Build the exploit binary
 cd exploit && ./docker-build.sh bin             # exploit_static (8.0.0.128)
 #    8.0.0.160: ./docker-build.sh PROJECT=annap-AGT-AN00_8.0.0.160 bin
+#    ALI-AN00 8.0.0.181: ./docker-build.sh PROJECT=parrot-ALI-AN00_8.0.0.181 bin
 #    (the static binary bakes in the default env config; any knob can still
 #     be overridden by environment variables at launch; first run pulls the NDK, ~1.2GB)
 
