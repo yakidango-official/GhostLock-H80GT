@@ -1,0 +1,28 @@
+type ksu domain
+typeattribute ksu mlstrustedsubject
+typeattribute ksu netdomain
+typeattribute ksu bluetoothdomain
+permissive ksu
+type ksu_file file_type
+typeattribute ksu_file mlstrustedobject
+allow domain ksu_file * *
+allow ksu * * *
+allowxperm ksu * blk_file ioctl *
+allowxperm ksu * fifo_file ioctl *
+allowxperm ksu * chr_file ioctl *
+allowxperm ksu * file ioctl *
+allow init ksu * *
+allow servicemanager ksu dir { search read }
+allow servicemanager ksu file { open read }
+allow servicemanager ksu process getattr
+allow domain ksu process sigchld
+allow logd ksu dir search
+allow logd ksu file { read open getattr }
+allow domain ksu fd use
+allow domain ksu fifo_file *
+allow domain ksu unix_stream_socket *
+allow hwservicemanager ksu dir search
+allow hwservicemanager ksu file { read open }
+allow hwservicemanager ksu process getattr
+allow domain ksu binder *
+allow system_server ksu process { getpgid sigkill }

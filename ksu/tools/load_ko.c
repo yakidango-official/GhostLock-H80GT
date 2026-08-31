@@ -1,9 +1,10 @@
-// load_ko.c — minimal kernelsu.ko loader for the Honor 80 GT.
+// load_ko.c — minimal kernelsu.ko loader for the H80GT (Honor 80 GT).
 //
 // Replicates KernelSU's ksuinit::load_module: the .ko has SHN_UNDEF symbols
 // the kernel's module loader can't resolve because Honor (a) strips
-// commit_creds from /proc/kallsyms AND (b) doesn't EXPORT the SELinux
-// internals (avc_has_perm, avtab_*, sidtab_*, security_*) the .ko hooks. Resolve every SHN_UNDEF symbol against /proc/kallsyms (which lists
+// commit_creds/__cfi_slowpath/etc from /proc/kallsyms AND (b) doesn't EXPORT
+// the SELinux internals (avc_has_perm, avtab_*, sidtab_*, security_*) the .ko
+// hooks. Resolve every SHN_UNDEF symbol against /proc/kallsyms (which lists
 // ALL kernel symbols, not just exported ones) and rewrite each entry to
 // SHN_ABS with the runtime address; the loader then treats them as absolute
 // (no __ksymtab lookup) and applies relocations directly.
@@ -95,7 +96,7 @@ int main(int argc, char **argv){
   LOG("[*] symtab: %zu symbols\n", nsyms);
 
   // ---- collect undefined symbol names into the hash set ----
-  // kasan_flag_enabled alias: the custom kernelsu.ko does NOT reference
+  // kasan_flag_enabled alias: the custom kernelsu_h80gt.ko does NOT reference
   // it, but a stock inline-KASAN GKI .ko does while this kernel has
   // CONFIG_KASAN=n. Resolving it to CODE (ret stub, first byte != 0) would
   // make KASAN instrumentation touch the unmapped shadow -> panic. Aliasing

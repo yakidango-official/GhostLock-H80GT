@@ -1,0 +1,55 @@
+--- a/kernel/core/init.c
++++ b/kernel/core/init.c
+@@ -81,6 +81,30 @@
+ #endif
+ module_param(allow_shell, bool, 0);
+
++// ALI-AN00: GhostLock sysctl route hijacks boot_id ctl_table.data as its
++// arbitrary R/W channel and never restores it. Kernel-side fix: restore
++// ctl_table.data back to the real sysctl_bootid buffer. Both are statics
++// stripped from kallsyms, so the loader passes link+slide as module params.
++static unsigned long h80gt_bootid_ctl;
++module_param(h80gt_bootid_ctl, ulong, 0);
++static unsigned long h80gt_bootid_buf;
++module_param(h80gt_bootid_buf, ulong, 0);
++
++static void __init h80gt_restore_bootid(void)
++{
++    if (!h80gt_bootid_ctl || !h80gt_bootid_buf)
++        return;
++    // struct ctl_table: data @ offset +8 (device-verified layout)
++    *(void **)(h80gt_bootid_ctl + 8) = (void *)h80gt_bootid_buf;
++    pr_info("ALI-AN00: boot_id ctl.data restored (ctl=0x%lx buf=0x%lx)\n",
++            h80gt_bootid_ctl, h80gt_bootid_buf);
++}
++
+ bool ksu_no_custom_rc = false;
+ module_param_named(norc, ksu_no_custom_rc, bool, 0);
+
+@@ -140,7 +164,12 @@
+     if (ksu_late_loaded) {
+         pr_info("late load mode, skipping kprobe hooks\n");
+
+-        apply_kernelsu_rules();
++        // ALI-AN00: NEVER call apply_kernelsu_rules() on late load.
++        // It swaps the live policydb without calling security_load_policy(),
++        // so sidtab_convert() never runs and every running SID keeps a
++        // context computed against the destroyed policydb. Rules are
++        // pre-injected via magiskpolicy --live BEFORE module load.
++        h80gt_restore_bootid();
+         cache_sid();
+         setup_ksu_cred();
+
+@@ -161,9 +190,9 @@
+         ksu_boot_completed = true;
+         track_throne(false);
+
++        // ALI-AN00: do NOT setenforce here. Enforcing is flipped manually
++        // as the LAST step of the load flow, after userspace is set up.
+         if (!getenforce()) {
+-            pr_info("Permissive SELinux, enforcing\n");
+-            setenforce(true);
++            pr_info("ALI-AN00: keeping permissive until flow enforces manually\n");
+         }
+
+     } else {
