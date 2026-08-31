@@ -113,7 +113,7 @@ try_once() {
   dev "mkdir -p $RD" || return 1
 
   echo "== staging payload"
-  for f in ksu_loader.tmpl ksu_rules kernelsu.ko load_ko magiskpolicy ksud kmsg_dumper; do
+  for f in ksu_rules kernelsu.ko load_ko magiskpolicy ksud kmsg_dumper; do
     put "$f" "$RD/$f" || return 1
   done
   if [ "$MODE" = pc ]; then
@@ -144,15 +144,35 @@ try_once() {
     sleep 5
     if [ "$MODE" = pc ]; then
       [ "$($ADB get-state 2>/dev/null)" = device ] || {
-        echo "== the attempt missed and the device rebooted (happens sometimes); waiting for it to come back"
-        wait_booted || return 1
-        return 2
+        # An adb hiccup here would start a SECOND chain against the
+        # running one — confirm ours is still alive before calling a miss.
+        sleep 10
+        if dev "pgrep -f '$RD/explo[i]t' >/dev/null 2>&1 || pgrep -f 'ksu_loade[r].sh' >/dev/null 2>&1"; then
+          echo "== adb blinked mid-run but the chain is still alive; continuing to wait"
+        else
+          echo "== the attempt missed and the device rebooted (happens sometimes); waiting for it to come back"
+          wait_booted || return 1
+          return 2
+        fi
       }
     fi
     if dev "grep -qi kernelsu /proc/modules"; then
       echo "== KernelSU module loaded"
-      sleep 10   # let the loader finish restore + re-enforce
       dev "tail -5 $RD/ksu_load.log"
+      # The flip is the loader's LAST step: poll with a deadline; empty
+      # getenforce reads are adb blips and don't consume the budget.
+      eff=""
+      w=0
+      while [ $w -lt 60 ]; do
+        e=$(dev getenforce 2>/dev/null | tr -d '\r')
+        if [ "$e" = "Enforcing" ]; then eff=1; break; fi
+        [ -n "$e" ] && w=$((w + 1))
+        sleep 5
+      done
+      if [ "$eff" != 1 ]; then
+        echo "== ERROR: SELinux did not return to enforcing (see $RD/ksu_load.log)"
+        return 1
+      fi
       return 0
     fi
     i=$((i + 1))
@@ -174,6 +194,23 @@ try_once() {
 }
 
 # ---- attempts ----------------------------------------------------------------
+# A stale module fakes the success poll, and a second chain would
+# double-hijack boot_id. Reboot first.
+if dev "grep -qi kernelsu /proc/modules"; then
+  echo "== a KernelSU module is already loaded (previous session still live)."
+  echo "== reboot the phone first, then run this script again."
+  exit 1
+fi
+
+# Stop a running KSU manager: its probes race the chain, and only a fresh
+# post-success launch gets specialized with the module's driver fd.
+KSU_PKG="$(dev pm list packages weishu.kernelsu 2>/dev/null | sed -n 's/^package://p' | head -1)"
+if [ -n "$KSU_PKG" ]; then
+  dev "am force-stop $KSU_PKG" 2>/dev/null && echo "== KSU manager stopped (was running or not)"
+else
+  echo "== KSU manager not installed — skipping the stop/launch steps"
+fi
+
 n=1
 rc=2
 while [ $n -le $ATTEMPTS ]; do
@@ -188,7 +225,18 @@ done
 # Old run directories were only kept for forensics, and this run's loader already
 # salvaged any crash evidence out of them at startup (prev_* files).  Keep
 # the current one (it holds this run's logs) and drop the rest.
-dev "ls -d $RD_ROOT/ksu_run_* 2>/dev/null | grep -v '^$RD\$' | xargs rm -rf 2>/dev/null; rm -f $RD_ROOT/result.done $RD_ROOT/gl_anchor.log $RD_ROOT/gl_root_proof $RD_ROOT/.ksu_patched.ko; true"
+dev "ls -d $RD_ROOT/ksu_run_* 2>/dev/null | grep -v '^$RD\$' | xargs rm -rf 2>/dev/null; rm -f $RD_ROOT/gl_anchor.log $RD_ROOT/gl_root_proof $RD_ROOT/.ksu_patched.ko; true"
 
 echo
 echo "== done."
+
+# Launch the manager only now: module live AND enforcing restored, so
+# zygote specializes it with the seccomp allowance + driver fd.
+if [ -n "$KSU_PKG" ]; then
+  echo "== launching the KSU manager"
+  ACT="$(dev "cmd package resolve-activity --brief -c android.intent.category.LAUNCHER $KSU_PKG" 2>/dev/null | tail -n 1)"
+  case "$ACT" in
+    */*) dev "am start -n $ACT" >/dev/null 2>&1 && echo "== KSU manager launched" ;;
+    *) echo "== could not resolve the manager launcher activity" ;;
+  esac
+fi

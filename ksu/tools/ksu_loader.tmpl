@@ -12,10 +12,16 @@ OUT=$RD/ksu_load.log
   # to shell under enforcing; WE are kernel-domain root and can read them. Copy
   # unreadable to a normal shell; copy them out before the cleanup below
   # deletes the old run directories.
+  # Only failed previous runs carry debug evidence (their rundirs are
+  # deleted below); a succeeded one has nothing to salvage.
   for d in $(ls -d /data/local/tmp/ksu_run_* 2>/dev/null | grep -v "@STAMP@"); do
+    grep -q "KernelSU module loaded" $d/ksu_load.log 2>/dev/null && continue
     b=$(basename $d)
     cp $d/kmsg_cap.txt $RD/prev_kmsg_$b.txt 2>/dev/null && echo "preserved $b/kmsg_cap.txt"
     cp $d/ksu_load.log $RD/prev_load_$b.log 2>/dev/null && echo "preserved $b/ksu_load.log"
+    cp $d/gl.log $RD/prev_gl_$b.log 2>/dev/null && echo "preserved $b/gl.log"
+    cp $d/gl_route_marks $RD/prev_marks_$b 2>/dev/null
+    cp $d/gl_root_proof $RD/prev_proof_$b 2>/dev/null
   done
   chmod -R 666 $RD/prev_* 2>/dev/null
   cp /sys/fs/pstore/* $RD/ 2>/dev/null && ls $RD/*pstore* $RD/console-ramoops* 2>/dev/null
@@ -23,7 +29,6 @@ OUT=$RD/ksu_load.log
   for i in $(seq 1 100); do [ -s $RD/ksu_runtime.env ] && break; sleep 1; done
   . $RD/ksu_runtime.env
   echo "COMMIT_CRED_RT=$COMMIT_CRED_RT BOOTID_CTL_RT=$BOOTID_CTL_RT BOOTID_BUF_RT=$BOOTID_BUF_RT"
-  cat /proc/iomem > $RD/iomem.txt 2>/dev/null   # phys-base sampler, streamed off-device by the host watch
   echo "=== waiting for the exploit to disable sig_enforce (runs in parallel) ==="
   sv=$(cat /sys/module/module/parameters/sig_enforce 2>/dev/null)
   i=0
@@ -39,15 +44,14 @@ OUT=$RD/ksu_load.log
   echo "=== relax kptr_restrict and prepare the fake kallsyms ==="
   KR=$(cat /proc/sys/kernel/kptr_restrict); echo "kptr was=$KR"
   echo 0 > /proc/sys/kernel/kptr_restrict
-  echo "${COMMIT_CRED_RT#0x} T commit_creds" > $RD/kallsyms_add.txt
-  cat /proc/kallsyms > $RD/real_ks.tmp
-  cat $RD/kallsyms_add.txt $RD/real_ks.tmp > $RD/fake_kallsyms
-  echo "addendum: $(cat $RD/kallsyms_add.txt) (fake lines=$(wc -l < $RD/fake_kallsyms))"
+  { echo "${COMMIT_CRED_RT#0x} T commit_creds"; cat /proc/kallsyms; } > $RD/fake_kallsyms
+  echo "addendum: ${COMMIT_CRED_RT#0x} T commit_creds (fake lines=$(wc -l < $RD/fake_kallsyms))"
   # abort-path cleanup: every exit AFTER this point must resume hisecd and
   # restore sig_enforce / kptr_restrict. sig_enforce was flipped to 0 by the
   # parent route; sysfs accepts writing 1 back.
   if ! mount --bind $RD/fake_kallsyms /proc/kallsyms; then
     echo "bind-mount failed"
+    rm -f $RD/fake_kallsyms
     echo $KR > /proc/sys/kernel/kptr_restrict 2>/dev/null
     echo 1 > /sys/module/module/parameters/sig_enforce 2>/dev/null
     [ -n "$hp" ] && kill -CONT $hp 2>/dev/null && echo "hisecd resumed after abort"
@@ -65,7 +69,8 @@ OUT=$RD/ksu_load.log
   ctx=$(/system/bin/sh -c 'cat /proc/self/attr/current' 2>/dev/null)
   if [ -z "$ctx" ]; then
     echo "policy check failed (cannot read the process SELinux context) — aborting before the module load"
-    umount /proc/kallsyms 2>/dev/null; echo $KR > /proc/sys/kernel/kptr_restrict 2>/dev/null
+    umount /proc/kallsyms 2>/dev/null; rm -f $RD/fake_kallsyms
+    echo $KR > /proc/sys/kernel/kptr_restrict 2>/dev/null
     echo 1 > /sys/module/module/parameters/sig_enforce 2>/dev/null
     [ -n "$hp" ] && kill -CONT $hp 2>/dev/null && echo "hisecd resumed after abort"
     echo "NOTE: the boot_id kernel pointer is still redirected; reboot the device now"
@@ -76,7 +81,7 @@ OUT=$RD/ksu_load.log
   PO=$(cat /proc/sys/kernel/panic_on_oops 2>/dev/null); PO=${PO:-1}
   echo "panic_on_oops(before)=$PO"
   echo 0 > /proc/sys/kernel/panic_on_oops 2>&1
-  $RD/kmsg_dumper $RD/kmsg_cap.txt &
+  $RD/kmsg_dumper $RD/kmsg_cap.txt 2>$RD/kmsg_dumper.err &
   KMSG_PID=$!
   sleep 1
   if [ @ALLOW_SHELL@ = 1 ]; then KSU_PARAMS="allow_shell=1 "; else KSU_PARAMS=""; fi
@@ -94,10 +99,16 @@ OUT=$RD/ksu_load.log
     # the session. Disable it before the ksud stages; the hotreboot module
     # re-enables and rebuilds it after its soft reboot.
     [ -d /data/adb/modules/zygisksu ] && touch /data/adb/modules/zygisksu/disable
-    $RD/ksud post-fs-data 2>&1; echo "post-fs-data exit=$?"
-    $RD/ksud services 2>&1; echo "services exit=$?"
-    $RD/ksud boot-completed 2>&1; echo "boot-completed exit=$?"
-    $RD/ksud install 2>&1; echo "install=$?"
+    # Own log file per stage: async module services inherit fds and would
+    # keep appending to ksu_load.log after we move on.
+    $RD/ksud post-fs-data > $RD/stage_post-fs-data.log 2>&1; echo "post-fs-data exit=$?"
+    echo "=== post-fs-data stage log ==="; cat $RD/stage_post-fs-data.log 2>&1
+    $RD/ksud services > $RD/stage_services.log 2>&1; echo "services exit=$?"
+    echo "=== services stage log ==="; cat $RD/stage_services.log 2>&1
+    # boot-completed and install have never printed anything (exit codes
+    # suffice); /dev/null also sinks any async fd inheritance safely.
+    $RD/ksud boot-completed > /dev/null 2>&1; echo "boot-completed exit=$?"
+    $RD/ksud install > /dev/null 2>&1; echo "install exit=$?"
     ls -la /data/adb/ksud 2>&1
     # CN builds: Honor's parseReadAppsPermission (framework PackageParser) calls
     # ActivityManager.isSystemReady() -> LocalServices lookup that only exists
@@ -119,11 +130,28 @@ OUT=$RD/ksu_load.log
   umount /proc/kallsyms 2>&1 && echo "umount OK"
   echo $KR > /proc/sys/kernel/kptr_restrict 2>&1 && echo "kptr restored=$KR"
   echo "=== clean up leftovers from earlier runs ==="
-  rm -f /data/local/tmp/{diag.sh,gl_exploit,gl_sysctl.log,kallsyms_add.txt,kernelsu.ko,kernelsu_neutered.ko,kmsg_dumper,ksu.rules,ksu_dev_inject.sh,ksu_dev_loader.sh,ksud,ksud_help.txt,load_ko,loadko_result.log,magiskpolicy,neut.sh,neut_result.log,policy_after_full.bin,result.done,ksu_rules} 2>&1
+  # The only top-level files this flow writes; everything else lives in
+  # per-run rundirs (swept below).
+  rm -f /data/local/tmp/{gl_anchor.log,gl_root_proof} 2>&1
   ls -d /data/local/tmp/ksu_run_* 2>/dev/null | grep -v "@STAMP@" | while read d; do rm -rf "$d"; done
+  # Everything with no reader past this point: intermediates, consumed
+  # inputs, one-shot payloads (running processes hold their inodes; the
+  # kills happen right below). What stays is evidence only.
+  rm -f $RD/fake_kallsyms \
+        $RD/loadko_result.log $RD/pristine_policy $RD/ksu_rules \
+        $RD/ksu_runtime.env $RD/cmd_req $RD/exploit $RD/kernelsu.ko \
+        $RD/load_ko $RD/magiskpolicy $RD/ksud $RD/kmsg_dumper
+  # post-fs-data's sync content is already inlined above; services.log
+  # stays — async service output lands there AFTER the inline cat.
+  rm -f $RD/stage_post-fs-data.log
   echo "cleanup done"
   echo "=== process cleanup (immediate) ==="
   pkill -9 -f 'gl_ex[p]loit' 2>/dev/null; echo "exploit processes stopped"
+  # Only after the anchor dies: it rewrites the proof every second, and
+  # the content is already surfaced in gl.log.
+  rm -f $RD/gl_root_proof $RD/gl_route_marks
+  # gl_parked: never sweep. Returned waiters exit on their own (slide.c);
+  # in-carrier ones panic the kernel if woken.
   kill $KMSG_PID 2>/dev/null; pkill -f ksucmdwatch 2>/dev/null
   echo "kmsg_dumper + cmd watcher stopped"
   echo "=== resume hisecd (a frozen hisecd wedges Honor's periodic ==="
@@ -131,7 +159,6 @@ OUT=$RD/ksu_load.log
   if [ @FREEZE_HISECD@ = 1 ] && [ -n "$hp" ]; then
     kill -CONT $hp 2>/dev/null && echo "hisecd resumed pid=$hp"
   fi
-  : > ${RD%/*}/result.done 2>/dev/null   # end-marker for host-side poll loops (written pre-enforce, while kernel-domain opens still work)
   # ADB Root note: the adb_root execve hook only takes effect for adbd
   # launches that happen after the feature is turned on, so an adbd started
   # earlier stays unrooted until it is restarted. The loader deliberately
@@ -141,13 +168,16 @@ OUT=$RD/ksu_load.log
   # hotreboot module handles it instead — it runs at each soft reboot from
   # the manager's ksu domain (where the kill does work under enforcing) and
   # restarts adbd only when it is not yet running with the hook.
+  echo "=== late module-stage output (async stragglers) ==="
+  tail -n 15 $RD/stage_services.log 2>/dev/null
+  echo "=== final ==="; grep -qi kernelsu /proc/modules && echo "KernelSU module loaded"; cut -d. -f1 /proc/uptime
   if grep -qi kernelsu /proc/modules && [ @ENFORCE@ = 1 ]; then
+    # Last statement: the shell does not survive the flip; the PC-side
+    # gate verifies enforcing live.
     echo "=== re-enable SELinux enforcing (last step) ==="
     echo 1 > /sys/fs/selinux/enforce 2>&1
-    read EBACK < /sys/fs/selinux/enforce 2>&1; echo "enforce readback=$EBACK"
   else
     echo "enforce step disabled or module missing — leaving SELinux permissive"
   fi
-  echo "=== final ==="; grep -qi kernelsu /proc/modules && echo "KernelSU module loaded"; cut -d. -f1 /proc/uptime
 } >> $OUT 2>&1
 echo "KSU_LOAD_DONE $OUT"
