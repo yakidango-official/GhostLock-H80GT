@@ -7,12 +7,26 @@ set -eu
 cd "$(dirname "$0")/.."
 
 # Device-verified firmwares; everything else ships as untested.
-VERIFIED=" 8.0.0.128 8.0.0.160 9.0.0.157 9.0.0.200SP1 9.0.0.220SP2 9.0.0.230 "
+VERIFIED=" 8.0.0.128 8.0.0.160 9.0.0.157 9.0.0.200SP1 9.0.0.220SP2 9.0.0.230 8.0.0.181 "
 
 if [ $# -gt 0 ]; then
-  TARGETS="$*"
+  TARGETS=""
+  for X in "$@"; do
+    case "$X" in
+      annap-AGT-AN00_*|parrot-ALI-AN00_*)
+        TARGETS="$TARGETS $X"
+        ;;
+      8.*|9.*)
+        TARGETS="$TARGETS annap-AGT-AN00_$X"
+        ;;
+      *)
+        echo "unknown target spec: $X"
+        exit 1
+        ;;
+    esac
+  done
 else
-  TARGETS=$(ls -d exploit/src/targets/annap-AGT-AN00_*/ | sed 's#.*annap-AGT-AN00_##;s#/$##' | sort)
+  TARGETS=$(ls -d exploit/src/targets/{annap-AGT-AN00_*,parrot-ALI-AN00_*} 2>/dev/null | xargs -n1 basename | sort)
 fi
 
 OUT_ROOT="build/release/ghostlock"
@@ -20,8 +34,12 @@ rm -rf "$OUT_ROOT"
 mkdir -p "$OUT_ROOT/exploits"
 
 : > "$OUT_ROOT/manifest"
-for VER in $TARGETS; do
-  T="annap-AGT-AN00_${VER}"
+for T in $TARGETS; do
+  case "$T" in
+    annap-AGT-AN00_*) VER="${T#annap-AGT-AN00_}" ;;
+    parrot-ALI-AN00_*) VER="${T#parrot-ALI-AN00_}" ;;
+    *) echo "unknown target family: $T"; exit 1 ;;
+  esac
   DIR="exploit/src/targets/$T"
   [ -f "$DIR/target.h" ] || { echo "unknown target $T"; exit 1; }
   ./exploit/docker-build.sh "PROJECT=$T" >/dev/null
