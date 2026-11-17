@@ -2,6 +2,18 @@ English | [中文](README.zh-CN.md)
 
 # Honor 80 GT Privilege Escalation PoC: GhostLock (CVE-2026-43499)
 
+> 🛑 **This project is no longer maintained**
+>
+> I found that a lot of people have been using this project to cheat in
+> games. That was never what I made it for, and I personally have neither
+> the means nor the ability to stop that kind of abuse. So this is where the
+> repository stops: no further updates, and the repository is archived
+> (read-only — issues and pull requests are closed). The final release is
+> [v0.3.2](https://github.com/yakidango-official/GhostLock-H80GT/releases/tag/v0.3.2).
+>
+> I hope the gaming environment keeps getting better, and I hope the geeks
+> who just enjoy tinkering with their own phones can understand.
+
 A local privilege escalation exploit for the **Honor 80 GT (AGT-AN00)**,
 CVE-2026-43499 — a use-after-free in the kernel `rtmutex` `remove_waiter`
 path — plus a companion KernelSU kernel-module loading solution.

@@ -2,6 +2,12 @@
 
 # 荣耀80 GT 提权 PoC：GhostLock (CVE-2026-43499)
 
+> 🛑 **本仓库停止更新**
+>
+> 由于发现很多人利用我的项目在游戏中作弊，这并不是我的本意，但我个人没能力也无法阻止这种滥用。本仓库停止更新，并已设为归档（只读，不再接受issue与PR）。最终版本为[v0.3.2](https://github.com/yakidango-official/GhostLock-H80GT/releases/tag/v0.3.2)。
+>
+> 希望游戏环境越来越好，也希望喜欢玩机的极客能够理解。
+
 适用于荣耀80 GT（AGT-AN00）的本地提权exploit（CVE-2026-43499，内核rtmutex `remove_waiter`路径的UAF），以及配套的KernelSU内核模块加载方案。
 
 原理上，本项目的漏洞和利用手法对9.0.0.230及之前的所有MagicOS版本都成立。已适配的版本：
